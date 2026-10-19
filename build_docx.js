@@ -345,9 +345,14 @@ const bodySection = {
     body('All audio files are resampled to 22,050 Hz and either truncated or zero-padded to a fixed duration of three seconds (66,150 samples). Four complementary time-frequency representations are then extracted with librosa [19]. The Mel Spectrogram (128 mel-frequency bands) captures the overall spectral energy distribution weighted to perceptual scale [25]. MFCCs (40 coefficients) encode the vocal-tract transfer function through cepstral analysis, providing a compact description of resonance structure [25]. The Constant-Q Transform (84 bins, 12 bins per octave) resolves harmonic content on a logarithmic frequency axis that closely mirrors musical pitch perception [30]. Chroma STFT (12 pitch-class bins) summarises tonal energy independently of octave, highlighting pitch-class patterns associated with emotional prosody [8]. Each representation is converted to decibel scale, normalised to [0, 255], and resized via bilinear interpolation to 128x128 pixels, yielding a set of grayscale images ready for downstream DIP enhancement.'),
 
     subHead('C.', 'DIP Enhancement Pipeline'),
-    body('Prior to fusion, each of the four 128x128 grayscale images undergoes a two-stage image-enhancement pipeline applied independently. The first stage is CLAHE [9]. The image is subdivided into non-overlapping 8x8 contextual tiles, and within each tile a histogram is equalised subject to a clip limit of 2.0 -- a threshold that redistributes excess histogram mass to other bins, preventing over-amplification of uniform regions while still enhancing local contrast [9],[28]. Tile boundaries are blended by bilinear interpolation, avoiding the blocking artefacts that afflict global histogram equalisation. The second stage is Unsharp Masking (UM) [20]: a Gaussian-blurred version of the CLAHE output (sigma = 1.0) is formed and then combined with the original to recover and amplify high-frequency detail:'),
+    body('Prior to fusion, each of the four 128x128 grayscale images undergoes a two-stage image-enhancement pipeline applied independently. The first stage is CLAHE [9]. The image is subdivided into non-overlapping 8x8 contextual tiles, and within each tile a histogram is equalised subject to a clip limit of 2.0. Bins whose count exceeds the clip limit are clipped, and the excess mass is redistributed uniformly across all bins before equalisation:'),
 
-    eq('I_sharp = (1+alpha)·I_CLAHE - alpha·G_sigma(I_CLAHE)', 1),
+    eq('h_clipped(v) = min( h(v), clip_limit )', 1),
+    eq('h_redis(v)  = h_clipped(v) + excess / N_bins', 2),
+
+    body('where h(v) is the histogram count at intensity v, clip_limit = 2.0, excess = sum of all clipped counts, and N_bins = 256. This prevents over-amplification of uniform regions while still enhancing local contrast [9],[28]. Tile boundaries are blended by bilinear interpolation, avoiding the blocking artefacts that afflict global histogram equalisation. The second stage is Unsharp Masking (UM) [20]: a Gaussian-blurred version of the CLAHE output (sigma = 1.0) is formed and then combined with the original to recover and amplify high-frequency detail:'),
+
+    eq('I_sharp = (1+alpha)·I_CLAHE - alpha·G_sigma(I_CLAHE)', 3),
 
     body('where G_sigma denotes convolution with a Gaussian kernel of standard deviation sigma = 1.0, and alpha = 1.5 [20]. The operation restores fine frequency boundaries that CLAHE may have smoothed, without disturbing the global intensity distribution that CLAHE established. Together, the two stages address different scales of the contrast problem: CLAHE operates on the local histogram, while UM targets the sharpness of edges at the pixel level.'),
 
@@ -371,6 +376,18 @@ const bodySection = {
     secHead('III', 'Ablation Study Design'),
 
     body('To separate the effect of DIP enhancement from the effect of multi-channel fusion, four conditions are constructed in a 2x2 factorial arrangement over channel count (single vs. four) and enhancement (no DIP vs. DIP) [7],[8],[15]. B1: single Mel channel, no DIP -- the standard baseline representative of earlier spectrogram CNN approaches [10],[11]. The Mel image is replicated to three channels to satisfy MobileNetV2\'s expected input shape. B2: single Mel channel with CLAHE+UM applied, isolating image enhancement as the sole experimental variable over B1. B3: four spectrogram channels (Mel, MFCC, CQT, Chroma) without DIP, testing multi-channel fusion alone in the style of [6],[8]. B4: four channels with DIP, the complete proposed system. This design yields three orthogonal comparisons: B1 vs. B2 measures the DIP gain on a single channel; B1 vs. B3 measures the multi-channel gain without enhancement; B3 vs. B4 measures the DIP gain in the multi-channel regime. B4 vs. B1 gives the overall combined gain of the full system relative to the minimal baseline.'),
+
+    body('All conditions are evaluated on macro-averaged metrics, as recommended for multi-class tasks with approximately balanced classes [27]. For each class c, let TP_c, FP_c, and FN_c denote true positives, false positives, and false negatives respectively. Per-class precision, recall, and F1 are:'),
+
+    eq('Precision_c = TP_c / (TP_c + FP_c)', 4),
+    eq('Recall_c    = TP_c / (TP_c + FN_c)', 5),
+    eq('F1_c        = 2 · Precision_c · Recall_c / (Precision_c + Recall_c)', 6),
+
+    body('Macro-averaged F1 averages uniformly across all C = 8 emotion classes, giving equal weight to each class regardless of support:'),
+
+    eq('Macro F1 = (1/C) · Σ_{c=1}^{C} F1_c', 7),
+
+    body('Accuracy is reported as the fraction of correctly classified test samples across all classes. Macro-averaging is preferred over weighted averaging here because it prevents the metric from being dominated by high-support classes that are consistently easier to classify [3],[27].'),
 
     blank(),
 
@@ -438,7 +455,15 @@ const bodySection = {
     // ── V. GRAD-CAM ──
     secHead('V', 'Per-Channel Grad-CAM Analysis'),
 
-    body('Performance metrics alone do not reveal how the model distributes attention across the four spectrogram representations, nor do they indicate which channel contributes most to a given emotion class. To address this, Grad-CAM [22] is adapted for per-channel attribution using the B4 model. For a given utterance and target class, TensorFlow GradientTape records the gradient of the predicted class logit with respect to the final convolutional feature map (4x4x1,280) of MobileNetV2. The gradient tensor is globally pooled to channel-wise importance weights, multiplied with the feature map, and summed across channels; the resulting scalar map is ReLU-clamped, max-normalised, and bilinearly upsampled to 128x128. This heatmap is then multiplied element-wise with each of the four DIP-enhanced input channels separately, and the mean of each product is recorded as the attention score for that (emotion, channel) pair [17],[5]. Applying this procedure to one representative sample per emotion class and row-normalising the resulting 8x4 matrix produces a relative channel importance profile: each row sums to 1.0 and reflects how the model distributes its attention across Mel, MFCC, CQT, and Chroma for that particular emotion class. This goes beyond what standard single-channel Grad-CAM can offer [22], directly answering which spectral representation the model finds most informative per emotion.'),
+    body('Performance metrics alone do not reveal how the model distributes attention across the four spectrogram representations, nor do they indicate which channel contributes most to a given emotion class. To address this, Grad-CAM [22] is adapted for per-channel attribution using the B4 model. For a given utterance and target class c, let A^k denote the k-th feature map of the final convolutional layer (4x4x1,280 in MobileNetV2), and y^c the predicted logit for class c. The importance weight for feature map k is obtained by global average pooling of the gradient:'),
+
+    eq('α_k^c = (1/Z) · Σ_i Σ_j  (∂y^c / ∂A_{ij}^k)', 8),
+
+    body('where Z = 4x4 = 16 is the number of spatial positions and (i,j) indexes the spatial location. The class-discriminative localisation map is then formed as a ReLU-gated weighted combination of the feature maps:'),
+
+    eq('L_c^{Grad-CAM} = ReLU( Σ_k  α_k^c · A^k )', 9),
+
+    body('ReLU is applied to retain only the features that have a positive influence on the class score [22]. The resulting 4x4 scalar map is bilinearly upsampled to 128x128 and multiplied element-wise with each of the four DIP-enhanced input channels separately; the mean of each product is recorded as the attention score for that (emotion, channel) pair [17],[5]. Applying this procedure to one representative sample per emotion class and row-normalising the resulting 8x4 matrix produces a relative channel importance profile: each row sums to 1.0 and reflects how the model distributes its attention across Mel, MFCC, CQT, and Chroma for that emotion class. This goes beyond standard single-channel Grad-CAM [22], directly answering which spectral representation the model finds most informative per emotion.'),
 
     figImg('fig4_gradcam.png', 3.2, 1.38),
     figCap(4, 'Per-channel Grad-CAM overlays for a representative "angry" sample (RAVDESS Actor 01). Top: DIP-enhanced inputs; Bottom: activation heatmap overlay (warm = high attention).'),
