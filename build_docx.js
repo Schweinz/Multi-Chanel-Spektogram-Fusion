@@ -186,6 +186,53 @@ function ieeeCell(text, colW, opts = {}) {
   });
 }
 
+// ── Hyperparameter summary table ─────────────────────────────
+function hyperparamTable() {
+  const colW = [1900, 1040, 1300]; // total 4240 twip
+  const headers = ['Hyperparameter', 'Value', 'Scope'];
+  const rows = [
+    ['Input size',              '128×128×4 (or ×1)',       'Both phases'],
+    ['Optimiser',               'Adam (β₁=0.9, β₂=0.999)', 'Both phases'],
+    ['Loss function',           'Categorical cross-entropy', 'Both phases'],
+    ['Phase 1 learning rate',   '1×10⁻⁴',                  'Phase 1'],
+    ['Phase 1 epochs',          '10 (fixed)',               'Phase 1'],
+    ['Phase 2 learning rate',   '1×10⁻⁵',                  'Phase 2'],
+    ['Phase 2 max epochs',      '100',                      'Phase 2'],
+    ['Batch size',              '32',                       'Both phases'],
+    ['Early stopping patience', '15 epochs',                'Phase 2'],
+    ['ReduceLROnPlateau factor', '0.5 (patience=5)',        'Phase 2'],
+    ['Dropout rate',            '0.3 (×2 in head)',         'Both phases'],
+    ['Dense head units',        '128 (ReLU) → 8 (softmax)', 'Both phases'],
+    ['Backbone frozen',         'Yes (MobileNetV2)',        'Phase 1 only'],
+  ];
+  const lastRow = rows.length - 1;
+
+  return new Table({
+    width: { size: 4240, type: WidthType.DXA },
+    columnWidths: colW,
+    borders: { insideH: { style: BorderStyle.NONE }, insideV: { style: BorderStyle.NONE } },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: headers.map((h, i) => ieeeCell(h, colW[i], {
+          isHeader: true,
+          topBorder: 'double',
+          bottomBorder: 'single',
+          align: AlignmentType.LEFT,
+        })),
+      }),
+      ...rows.map((row, ri) => new TableRow({
+        children: row.map((val, ci) => ieeeCell(val, colW[ci], {
+          bold: false,
+          align: AlignmentType.LEFT,
+          topBorder: 'none',
+          bottomBorder: ri === lastRow ? 'single' : 'none',
+        })),
+      })),
+    ],
+  });
+}
+
 // ── SotA comparison table ────────────────────────────────────
 function sotaTable() {
   const colW = [1760, 760, 580, 580, 560]; // total 4240 twip
@@ -406,6 +453,13 @@ const bodySection = {
     subHead('E.', 'Two-Phase Training Strategy'),
     body('Training is split into two phases to stabilise fine-tuning of a pretrained backbone on a small dataset. Phase 1 freezes the MobileNetV2 backbone and trains only the 1x1 projection layer and the classification head for ten epochs (Adam, lr=1e-4, batch size 32, categorical cross-entropy). The purpose is to reach a stable head configuration before any pretrained weights are perturbed; randomly initialised head weights carrying large gradients early in training can distort the backbone features that give transfer learning its value [14],[21]. Once the head has converged to a reasonable initialisation, Phase 2 unfreezes all layers and fine-tunes them jointly at a lower rate (lr=1e-5, max 100 epochs). Two callbacks guard against overfitting: Early Stopping (patience=15, monitored on validation loss) terminates the run when no improvement occurs for fifteen consecutive epochs; ReduceLROnPlateau (factor=0.5, patience=5) halves the learning rate after five stagnant epochs, allowing the optimiser to descend from shallow plateaus without destabilising the solution [4],[5],[13],[23]. On RAVDESS, Phase 2 typically converges within forty to sixty epochs.'),
 
+    ...tableCap('TABLE IV', 'Training Hyperparameter Configuration'),
+    hyperparamTable(),
+    blank(40),
+
+    subHead('F.', 'Implementation Details'),
+    body('All experiments are implemented in Python 3.10 with TensorFlow 2.13 and Keras 2.13. Spectrogram extraction and DIP enhancement use librosa 0.10 [19], OpenCV 4.8, and NumPy 1.24. Model training is conducted on a single NVIDIA Tesla T4 GPU (16 GB VRAM) with CUDA 11.8 and cuDNN 8.6; CPU fallback uses an Intel Xeon (2.20 GHz, 16 vCPUs). Phase 1 training (10 epochs, batch size 32) completes in approximately 2 minutes; Phase 2 fine-tuning with early stopping converges in approximately 8–12 minutes depending on condition, for a total wall-clock time under 15 minutes per ablation condition. The full four-condition ablation (B1–B4) runs in under one hour on a single GPU. Preprocessing (spectrogram extraction and DIP enhancement for all 1,440 RAVDESS samples) adds approximately 3 minutes and is performed once before training. All random seeds (NumPy, TensorFlow, Python) are fixed to 42 for reproducibility; the stratified train/validation/test split is constructed once and held constant across all four conditions. Grad-CAM attribution (Section V) is performed post-hoc on saved model weights using TensorFlow\'s GradientTape API, with representative samples drawn one per emotion class from the test set.'),
+
     blank(),
 
     // ── III. ABLATION ──
@@ -455,6 +509,8 @@ const bodySection = {
       alignment: AlignmentType.CENTER,
       spacing: { before: 20, after: 80 },
     }),
+
+    body('Table II and Fig. 6 break down Macro F1 by emotion class and condition, revealing patterns that aggregate metrics conceal. Across all four conditions, calm and neutral consistently register the lowest F1 scores (calm: 0–18%, neutral: 5–22%), reflecting the well-documented acoustic similarity between the two categories -- both occupy low-arousal, low-valence space with subdued pitch dynamics and moderate intensity [29],[3]. The lack of distinct acoustic landmarks makes them mutually confusable regardless of input configuration, a finding consistent across RAVDESS-based studies [11],[27]. Happy and surprised are the next most confused pair; both involve high arousal and elevated pitch, and their primary acoustic difference -- the element of unexpectedness in surprised -- leaves no spectrogram trace that DIP enhancement or multi-channel fusion can recover [3],[29]. By contrast, angry achieves relatively higher F1 in B1 and B2 (up to 44% in B2), benefiting from the strong and consistent acoustic signature of high-intensity, high-energy speech that all tested representations capture well [29]. Fearful and disgust occupy an intermediate range: fearful shows wide within-condition variance, likely because the acoustic realisation of fear ranges from whispered to shouted depending on context [29]; disgust is marked mainly by low intensity and tense voice quality, features that are more visible in the MFCC channel than in Mel or CQT, explaining why B3 and B4 (which include MFCC) show marginal gains for this class over B1 despite lower overall accuracy. The per-class view also makes the B3 regression more transparent: the collapse in overall performance under the four-channel configuration is not uniform -- all eight classes degrade, but the emotions with the weakest acoustic signatures (calm, neutral, disgust) suffer the largest absolute drops, suggesting that the additional input channels introduce noise that specifically harms the low-signal classes.'),
 
     blank(40),
 
