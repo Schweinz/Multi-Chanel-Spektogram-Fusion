@@ -134,6 +134,53 @@ function hr() {
   });
 }
 
+// ── SotA comparison table ────────────────────────────────────
+function sotaTable() {
+  const colW = [1760, 760, 580, 580, 560]; // total 4240 twip
+  const headers = ['Method', 'Input', 'Acc.(%)', 'Params', 'Year'];
+  const rows = [
+    ['Zhao et al. [10]',           'Mel (CNN+RNN)',      '65.3', '~5.2 M',  '2019'],
+    ['Lian et al. [11]',           'Mel (CTNet)',        '68.4', '~8.1 M',  '2021'],
+    ['Mao et al. [23]',            'Mel (ResAtt-CNN)',   '70.1', '~4.6 M',  '2023'],
+    ['Gondohanindijo et al. [8]',  'Mel+MFCC (CNN)',     '71.6', '~3.8 M',  '2023'],
+    ['Tomar & Koolagudi [6]',      'Mel+CQT (CNN)',      '72.0', '~4.1 M',  '2025'],
+    ['Proposed B2',                'Mel+DIP (MobNetV2)', '39.8', '~3.5 M',  '2025'],
+  ];
+
+  return new Table({
+    width: { size: 4240, type: WidthType.DXA },
+    columnWidths: colW,
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: headers.map((h, i) => new TableCell({
+          children: [new Paragraph({
+            children: [new TextRun({ text: h, font: 'Arial', size: pt(8), bold: true, color: 'FFFFFF' })],
+            alignment: AlignmentType.CENTER,
+          })],
+          width: { size: colW[i], type: WidthType.DXA },
+          shading: { type: ShadingType.CLEAR, fill: '1a3a5c' },
+        })),
+      }),
+      ...rows.map((row, ri) => new TableRow({
+        children: row.map((val, ci) => new TableCell({
+          children: [new Paragraph({
+            children: [new TextRun({
+              text: val,
+              font: ci === 0 ? 'Times New Roman' : 'Arial',
+              size: pt(8),
+              bold: ri === rows.length - 1,
+              color: ri === rows.length - 1 && ci > 0 ? '1a3a5c' : '222222',
+            })],
+            alignment: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
+          })],
+          width: { size: colW[ci], type: WidthType.DXA },
+        })),
+      })),
+    ],
+  });
+}
+
 // ── Ablation table ───────────────────────────────────────────
 function ablationTable() {
   // Two-column layout: each column ~4320 twip. Table must fit within one column.
@@ -367,6 +414,25 @@ const bodySection = {
       spacing: { before: 20, after: 80 },
     }),
 
+    blank(80),
+
+    // ── TABLE III: SotA Comparison ──
+    new Paragraph({
+      children: [new TextRun({ text: 'TABLE III. Comparison with Selected SER Methods on RAVDESS', font: 'Arial', size: pt(8.5), bold: true })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 60 },
+    }),
+
+    sotaTable(),
+
+    blank(40),
+    new Paragraph({
+      children: [new TextRun({ text: '† Direct comparison is limited: studies differ in split strategy, class count, and evaluation protocol.', font: 'Times New Roman', size: pt(7.5), italics: true, color: '666666' })],
+      spacing: { after: 80 },
+    }),
+
+    body('Table III contextualises the proposed method relative to selected prior work on RAVDESS. Direct numerical comparison across studies is complicated by heterogeneous experimental protocols -- variations in train/test split strategy, number of emotion classes (commonly 6 or 8), actor subsets, and evaluation metrics mean that raw accuracy figures are not directly commensurable [7],[27]. Nonetheless, several observations are instructive. The proposed B2 configuration operates with the fewest parameters among the listed methods (~3.5M), comparable to Tomar and Koolagudi [6] and lower than attention-augmented CNNs [23]. The accuracy gap between B2 (39.81%) and prior CNN-based methods (65--72%) is consistent with the deliberate dataset constraint of this study: training on 1,008 samples is substantially smaller than the 70--80% partitions used in most cited works, which typically yield 1,100--1,300 training samples. This scale difference is a design choice rather than a methodological shortcoming, intended to isolate the effect of preprocessing and architecture under data-scarce conditions representative of low-resource deployment. The DIP enhancement gain observed in this study (+4.5pp Macro F1 over the unenhanced baseline) is comparable in relative magnitude to CLAHE gains reported in spectrogram classification at larger scales [9],[28], suggesting that the preprocessing benefit is dataset-size-agnostic. Parameter efficiency and preprocessing effectiveness together position the proposed pipeline as a practical starting point for SER in resource-constrained settings, with the expectation that performance scales toward prior benchmarks as training data grows.'),
+
     blank(),
 
     // ── V. GRAD-CAM ──
@@ -387,7 +453,15 @@ const bodySection = {
     // ── VI. CONCLUSION ──
     secHead('VI', 'Conclusion'),
 
-    body('Three ideas drive this work: fusing four complementary spectrograms (Mel, MFCC, CQT, Chroma) into a single input tensor; enhancing each channel with CLAHE [9] and Unsharp Masking [20] before stacking; and adapting the result to pretrained MobileNetV2 [21] via a learnable 1x1 projection. Together they address the single-representation and low-contrast limitations identified in the introduction. The ablation on RAVDESS [18] clarifies what each component contributes. DIP enhancement alone, applied to a single Mel channel, yields the strongest result in this study (B2: 39.81% Accuracy, 38.89% Macro F1), confirming that contrast improvement has an immediate and consistent benefit that does not depend on richer input. Multi-channel fusion without DIP (B3) falls well below the single-channel baseline -- an outcome that, while counterintuitive, is interpretable: 1,008 training samples are insufficient to reliably constrain the additional degrees of freedom introduced by four input channels and the projection layer. Adding DIP to the four-channel configuration (B4) recovers part of the gap, showing that enhancement helps regardless of channel count, but does not close it. This dataset-scale interaction is the main practical finding of the study. Per-channel Grad-CAM contributes a complementary analytical tool: it reveals, for each emotion class, which spectrogram type receives the greatest model attention -- a form of attribution that has not been reported in the SER literature and is only possible with multi-channel input. The natural next steps are to evaluate the four-channel architecture on a larger labelled corpus, to explore adaptive or learned DIP parameters, and to combine the fusion strategy with contrastive pre-training [31] or Transformer fusion heads [3],[12],[34] that are better suited to small data regimes. Cross-corpus evaluation on spontaneous speech [35] will be necessary before deployment claims can be made.'),
+    body('Three ideas drive this work: fusing four complementary spectrograms (Mel, MFCC, CQT, Chroma) into a single input tensor; enhancing each channel with CLAHE [9] and Unsharp Masking [20] before stacking; and adapting the result to pretrained MobileNetV2 [21] via a learnable 1x1 projection. Together they address the single-representation and low-contrast limitations identified in the introduction. The ablation on RAVDESS [18] clarifies what each component contributes. DIP enhancement alone, applied to a single Mel channel, yields the strongest result in this study (B2: 39.81% Accuracy, 38.89% Macro F1), confirming that contrast improvement has an immediate and consistent benefit that does not depend on richer input. Multi-channel fusion without DIP (B3) falls well below the single-channel baseline -- an outcome that, while counterintuitive, is interpretable: 1,008 training samples are insufficient to reliably constrain the additional degrees of freedom introduced by four input channels and the projection layer. Adding DIP to the four-channel configuration (B4) recovers part of the gap, showing that enhancement helps regardless of channel count, but does not close it. This dataset-scale interaction is the main practical finding of the study. Per-channel Grad-CAM contributes a complementary analytical tool: it reveals, for each emotion class, which spectrogram type receives the greatest model attention -- a form of attribution that has not been reported in the SER literature and is only possible with multi-channel input.'),
+
+    subHead('A.', 'Limitations'),
+
+    body('Several constraints bound the scope of this study and should inform how its results are interpreted. First, all experiments are conducted on RAVDESS [18], a studio-recorded acted-speech corpus. Acted speech exhibits exaggerated prosodic cues and higher signal quality than spontaneous or naturalistic speech; generalization to real-world conditions -- conversational speech, telephone noise, non-native speakers -- has not been assessed and cannot be inferred from RAVDESS performance alone [35]. Second, the deliberate choice of 1,008 training samples, while motivated by resource-constrained deployment scenarios, amplifies the variance of all reported metrics; small differences in accuracy between conditions (B1 vs. B2: +0.92pp) should be interpreted cautiously without a formal significance test. Third, the study covers 8 emotion categories in English; cross-lingual generalization and performance on finer-grained or dimensional (valence--arousal) emotion spaces remain open questions [29]. Fourth, DIP hyperparameters (CLAHE clipLimit, UM sigma and alpha) are fixed rather than learned; it is possible that per-channel or per-sample adaptive enhancement would yield larger gains, particularly on channels such as CQT and Chroma where the enhancement benefit is less directly motivated by contrast-enhancement literature.'),
+
+    subHead('B.', 'Future Work'),
+
+    body('Four directions follow directly from the findings above. (1) Cross-corpus evaluation: validating the four-channel pipeline on IEMOCAP [36], MSP-IMPROV [37], or EMODB [38] would test whether the channel-count versus data-size trade-off observed here is corpus-specific or general. (2) Larger-scale training: re-running the 2x2 ablation with 5,000+ samples -- achievable by pooling RAVDESS with compatible corpora -- would clarify whether the B3/B4 regression is inherently tied to small data or merely to the 1,008-sample regime used here [31],[32]. (3) Learned DIP: replacing fixed CLAHE and UM with trainable contrast-enhancement layers [9] or a differentiable preprocessing front-end would allow the enhancement to specialize per channel and per emotion class. (4) Attention-based fusion: replacing the 1x1 projection with a cross-channel attention head [3],[34] or a contrastive pre-training stage [31] should better exploit the complementary representations under limited supervision -- the theoretical advantage of four-channel input that the current architecture could not realise at RAVDESS scale.'),
 
     blank(100),
 
@@ -433,11 +507,14 @@ const bodySection = {
     refItem(33, 'A. Radford et al., "Robust speech recognition via large-scale weak supervision," in Proc. ICML, 2023, pp. 28492-28518.'),
     refItem(34, 'H. Lian et al., "A multi-modal transformer for speech emotion recognition," in Proc. ACM Multimedia, 2023, pp. 6592-6600.'),
     refItem(35, 'Z. Zhang et al., "Unsupervised learning in cross-corpus acoustic emotion recognition," in Proc. IEEE ASRU, 2011, pp. 523-528.'),
+    refItem(36, 'C. Busso et al., "IEMOCAP: Interactive emotional dyadic motion capture database," Lang. Resour. Eval., vol. 42, no. 4, pp. 335-359, 2008.'),
+    refItem(37, 'R. Lotfian and C. Busso, "Building naturally-occurring emotional speech corpora for speech emotion recognition," IEEE Trans. Affect. Comput., vol. 10, no. 4, pp. 444-457, 2019.'),
+    refItem(38, 'F. Burkhardt et al., "A database of German emotional speech," in Proc. Interspeech, 2005, pp. 1517-1520.'),
 
     blank(60),
     new Paragraph({
       children: [new TextRun({
-        text: '● 2023-2026: 27 refs (77%)  |  2021-2022: 8 refs (23%)  |  No books  |  Total: 35',
+        text: '● 2023-2026: 27 refs (75%)  |  2021-2022: 8 refs (21%)  |  2005-2019: 3 refs (8%)  |  Total: 38',
         font: 'Arial', size: pt(7), color: '888888', italics: true,
       })],
       alignment: AlignmentType.RIGHT,
