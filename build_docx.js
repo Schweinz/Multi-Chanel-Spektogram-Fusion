@@ -36,21 +36,21 @@ function bodyRuns(runs) {
 function secHead(num, title) {
   return new Paragraph({
     children: [
-      ...(num ? [new TextRun({ text: `${num}. `, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' })] : []),
-      new TextRun({ text: title, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' }),
+      ...(num ? [new TextRun({ text: `${num}. `, font: 'Times New Roman', size: pt(10), bold: true, allCaps: true })] : []),
+      new TextRun({ text: title, font: 'Times New Roman', size: pt(10), bold: true, allCaps: true }),
     ],
-    spacing: { before: 180, after: 60 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' } },
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 160, after: 60 },
   });
 }
 
 function subHead(num, title) {
   return new Paragraph({
     children: [
-      ...(num ? [new TextRun({ text: `${num} `, font: 'Times New Roman', size: pt(9.5), bold: true, italics: true })] : []),
-      new TextRun({ text: title, font: 'Times New Roman', size: pt(9.5), bold: true, italics: true }),
+      ...(num ? [new TextRun({ text: `${num} `, font: 'Times New Roman', size: pt(10), bold: true, italics: true })] : []),
+      new TextRun({ text: title, font: 'Times New Roman', size: pt(10), bold: true, italics: true }),
     ],
-    spacing: { before: 100, after: 40 },
+    spacing: { before: 80, after: 40 },
   });
 }
 
@@ -82,7 +82,7 @@ function figPH(label, desc) {
 function figCap(num, text) {
   return new Paragraph({
     children: [
-      new TextRun({ text: `Figure ${num}. `, font: 'Times New Roman', size: pt(8.5), bold: true }),
+      new TextRun({ text: `Fig. ${num}. `, font: 'Times New Roman', size: pt(8.5), bold: true }),
       new TextRun({ text, font: 'Times New Roman', size: pt(8.5), italics: true }),
     ],
     alignment: AlignmentType.CENTER,
@@ -237,16 +237,16 @@ const titleSection = {
     type: SectionType.CONTINUOUS,
     page: {
       size: { width: twip(8.5), height: twip(11) },
-      margin: { top: twip(1), bottom: twip(1), left: twip(0.75), right: twip(0.75) },
+      margin: { top: twip(0.75), bottom: twip(1), left: twip(0.625), right: twip(0.625) },
     },
     column: { count: 1 },
   },
   children: [
-    // TITLE
+    // TITLE — IEEE: ~24pt Times New Roman bold, centered
     new Paragraph({
       children: [new TextRun({
         text: 'Multi-Channel Spectrogram Fusion with Digital Image Processing Enhancement for Convolutional Neural Network-Based Speech Emotion Recognition',
-        font: 'Times New Roman', size: pt(15.5), bold: true,
+        font: 'Times New Roman', size: pt(20), bold: true,
       })],
       alignment: AlignmentType.CENTER,
       spacing: { after: 120 },
@@ -285,21 +285,16 @@ const titleSection = {
 
     hr(),
 
-    // ABSTRACT heading
-    new Paragraph({
-      children: [new TextRun({ text: 'ABSTRACT', font: 'Arial', size: pt(8), bold: true, color: '000000' })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 60 },
-    }),
-
-    // Abstract text
+    // ABSTRACT — IEEE inline style: "Abstract—" bold-italic then text, no separate heading
     bodyRuns([
+      { text: 'Abstract—', bold: true, italics: true },
       { text: 'Recognition of emotional state from spoken language is an open problem in affective computing, with applications in human-computer interaction [1], mental health monitoring [2], and social robotics [3]. Most current deep learning systems convert each utterance to a single spectrogram -- typically a Mel Spectrogram or MFCC -- and feed the resulting image into a convolutional network. Two practical problems arise from this design. First, a single representation discards complementary acoustic information that other time-frequency analyses capture: CQT reveals harmonic structure on a log-frequency scale [30], while Chroma STFT encodes pitch-class energy that reflects tonal prosody [8]. Second, the direct conversion from audio to image tends to produce spectrograms with low local contrast, particularly in mid-frequency regions where formant transitions carry much of the affective signal [9],[28]. We address both problems simultaneously. Four spectrogram types -- Mel Spectrogram, MFCC, Constant-Q Transform (CQT), and Chroma STFT -- are extracted from each utterance using librosa [19], enhanced independently by CLAHE [9] and Unsharp Masking [20], and stacked into a 128x128x4 input tensor. A learnable 1x1 convolutional projection layer maps this to the three-channel space of pretrained MobileNetV2 [21] without spatial resampling. Training uses a two-phase schedule (frozen backbone, then full fine-tuning) with early stopping on RAVDESS [18]. A systematic four-condition ablation isolates the contributions of the DIP pipeline and the multi-channel fusion independently. Unexpectedly, the single-channel Mel variant with DIP (B2) achieves the best test accuracy (39.81%) and macro F1 (38.89%), while the full four-channel model (B4) falls below it -- a finding that points to dataset-scale constraints rather than any flaw in the fusion design. Per-channel Grad-CAM [22] is applied to the multi-channel model to reveal which spectrogram type most influences each emotion-class prediction, providing channel-level interpretability not available from single-channel approaches [17].' },
     ]),
 
     blank(40),
+    // Index Terms — IEEE standard label
     bodyRuns([
-      { text: 'Keywords: ', bold: true, italics: true },
+      { text: 'Index Terms—', bold: true, italics: true },
       { text: 'speech emotion recognition; multi-channel spectrogram fusion; CLAHE; unsharp masking; MobileNetV2; Grad-CAM; transfer learning; affective computing; RAVDESS' },
     ]),
     blank(80),
@@ -313,7 +308,7 @@ const bodySection = {
     type: SectionType.CONTINUOUS,
     page: {
       size: { width: twip(8.5), height: twip(11) },
-      margin: { top: twip(1), bottom: twip(1), left: twip(0.75), right: twip(0.75) },
+      margin: { top: twip(0.75), bottom: twip(1), left: twip(0.625), right: twip(0.625) },
     },
     column: { count: 2, space: twip(0.25), equalWidth: true },
   },
@@ -426,7 +421,7 @@ const bodySection = {
     }),
     figImg('fig_perclass_f1.png', 3.2, 1.07),
     new Paragraph({
-      children: [new TextRun({ text: 'Figure 6. Per-class macro F1 breakdown. Dashed line = macro average per condition.', font: 'Times New Roman', size: pt(8), italics: true })],
+      children: [new TextRun({ text: 'Fig. 6. Per-class macro F1 breakdown. Dashed line = macro average per condition.', font: 'Times New Roman', size: pt(8), italics: true })],
       alignment: AlignmentType.CENTER,
       spacing: { before: 20, after: 80 },
     }),
@@ -492,8 +487,8 @@ const bodySection = {
 
     // ── REFERENCES ──
     new Paragraph({
-      children: [new TextRun({ text: 'References', font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' })],
-      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '222222' } },
+      children: [new TextRun({ text: 'References', font: 'Times New Roman', size: pt(10), bold: true })],
+      alignment: AlignmentType.CENTER,
       spacing: { before: 140, after: 80 },
     }),
 
