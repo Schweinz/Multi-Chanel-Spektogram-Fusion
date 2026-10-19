@@ -4,9 +4,12 @@ const {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   AlignmentType, Table, TableRow, TableCell, WidthType,
   BorderStyle, ShadingType, PageOrientation,
-  SectionType, ColumnBreak
+  SectionType, ColumnBreak, ImageRun
 } = require('docx');
 const fs = require('fs');
+const path = require('path');
+
+const FIGURES_DIR = '/home/claude/figures';
 
 // ── Unit helpers ─────────────────────────────────────────────
 const twip = (inch) => Math.round(inch * 1440);
@@ -86,6 +89,26 @@ function figCap(num, text) {
     spacing: { before: 20, after: 80 },
   });
 }
+
+function figImg(filename, widthInch, heightInch) {
+  const imgPath = path.join(FIGURES_DIR, filename);
+  const imgBuf = fs.readFileSync(imgPath);
+  const ext = path.extname(filename).slice(1).toLowerCase(); // 'png' or 'jpg'
+  return new Paragraph({
+    children: [new ImageRun({
+      data: imgBuf,
+      transformation: {
+        width:  Math.round(widthInch * 96),
+        height: Math.round(heightInch * 96),
+      },
+      type: ext,
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 60, after: 20 },
+  });
+}
+
+
 
 function refItem(num, text) {
   return new Paragraph({
@@ -280,13 +303,13 @@ const bodySection = {
 
     body('where G_σ denotes Gaussian blur with σ = 1.0 [20]. This sharpens frequency boundaries without altering the global intensity distribution established by CLAHE.'),
 
-    figPH('Figure 1', '4 rows (Mel/MFCC/CQT/Chroma) × 3 cols (Original · CLAHE · CLAHE+UM)'),
+    figImg('fig1_spectrogram_grid.png', 3.2, 3.85),
     figCap(1, 'Two-stage DIP enhancement per channel. Columns: original, after CLAHE, after CLAHE+UM.'),
 
     subHead('D.', 'Four-Channel Fusion & Architecture'),
     body('The four enhanced 128×128 images are stacked into a 128×128×4 tensor (normalized to [0,1]). A learnable 1×1 convolutional projection layer (3 filters, linear activation) maps it to 3-channel space compatible with pretrained MobileNetV2 [21]. MobileNetV2’s depthwise separable convolutions and inverted residuals [21] provide efficiency for edge deployment [4],[13]. The backbone is followed by GAP, Dropout(0.3), Dense(128, ReLU), BN, Dropout(0.3), and a softmax output (N=8) for the eight RAVDESS classes [14].'),
 
-    figPH('Figure 2', 'Input(128×128×4)→Conv2D(1×1)→MobileNetV2→GAP→Dropout→Dense(128)→BN→Dropout→Softmax(8)'),
+    figImg('fig2_architecture.png', 3.2, 0.95),
     figCap(2, 'Proposed architecture. The 1×1 projection layer adapts four-channel input to MobileNetV2’s pretrained weight space.'),
 
     subHead('E.', 'Two-Phase Training Strategy'),
@@ -322,10 +345,23 @@ const bodySection = {
       spacing: { after: 80 },
     }),
 
-    figPH('Figure 3', 'Ablation grouped bar chart — Accuracy & Macro F1: B1 vs B2 vs B3 vs B4'),
+    figImg('fig3_ablation_bar.png', 3.2, 1.72),
     figCap(3, 'Accuracy and macro F1 comparison across four ablation conditions on RAVDESS test set.'),
 
     body('The B1→B2 gain (38.89→>39.81% Acc, 34.39→>38.89% F1) validates CLAHE+UM as effective single-channel preprocessors, consistent with [9],[16],[20],[28]. B2 achieves the highest accuracy (39.81%) and macro F1 (38.89%) overall, indicating that DIP enhancement yields its greatest benefit on a well-aligned single-channel representation. The drop in B3 (26.85%) and B4 (27.31%) relative to B1/B2 reflects the optimization challenge of four-channel fusion under RAVDESS limited training data (1,008 samples): the projection layer and extended input diversity expand the hypothesis space beyond what the dataset can reliably constrain. The B3→B4 marginal gain (26.85→>27.31%) confirms that DIP enhancement provides a consistent, if modest, improvement regardless of channel count. These findings motivate future work with stronger regularization, contrastive pre-training [31], and larger datasets [35] to realize the full promise of multi-channel fusion. Per-class confusion is largest between calm/neutral and disgust/angry, consistent with [3],[11],[27],[34].'),
+
+    blank(40),
+    new Paragraph({
+      children: [new TextRun({ text: 'TABLE II. Per-Class F1-Score per Condition (RAVDESS Test Set)', font: 'Arial', size: pt(8.5), bold: true })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 60 },
+    }),
+    figImg('fig_perclass_f1.png', 3.2, 1.07),
+    new Paragraph({
+      children: [new TextRun({ text: 'Figure 6. Per-class macro F1 breakdown. Dashed line = macro average per condition.', font: 'Times New Roman', size: pt(8), italics: true })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 20, after: 80 },
+    }),
 
     blank(),
 
@@ -334,10 +370,10 @@ const bodySection = {
 
     body('To provide interpretability [5],[17],[22], Grad-CAM [22] is extended to per-channel attribution. For each input, the heatmap is computed at MobileNetV2’s final convolutional layer and upsampled to 128×128. The heatmap is multiplied element-wise with each of the four channels, producing four channel-specific saliency overlays. Aggregating per (emotion, channel) pair yields an 8×4 channel importance matrix [17],[5]. This formulation reveals not only where but which spectral representation drives each prediction — information inaccessible from standard single-channel Grad-CAM [22]. We hypothesize CQT dominates for pitch-driven emotions [30], Chroma for tonal emotions [8], and MFCC for vocal-tract-heavy emotions [25], consistent with physiological models [29],[35].'),
 
-    figPH('Figure 4', 'Row 1: 4 input channels. Row 2: Grad-CAM overlay per channel. (Sample: “angry”)'),
+    figImg('fig4_gradcam.png', 3.2, 1.38),
     figCap(4, 'Per-channel Grad-CAM for a representative “angry” sample. Warmer = higher model attention.'),
 
-    figPH('Figure 5', 'Channel Importance Heatmap (8×4) — Rows: emotions, Cols: Mel/MFCC/CQT/Chroma'),
+    figImg('fig5_importance_heatmap.png', 3.0, 2.57),
     figCap(5, 'Aggregated per-channel Grad-CAM importance across all RAVDESS classes (row-normalized).'),
 
     blank(),
