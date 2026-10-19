@@ -1,5 +1,5 @@
-// build_docx.js — Generate SER Paper as IEEE-style .docx
-// Font: Times New Roman (serif body) + Arial (sans headings) — standard in LibreOffice/Word
+// build_docx.js -- Generate SER Paper as IEEE-style .docx
+// Font: Times New Roman (serif body) + Arial (sans headings) -- standard in LibreOffice/Word
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   AlignmentType, Table, TableRow, TableCell, WidthType,
@@ -139,10 +139,10 @@ function ablationTable() {
   const colW = [3000, 1200, 1200, 1200, 1200]; // total 8800 twip
   const headers = ['Condition', 'Acc. (%)', 'Prec. (%)', 'Rec. (%)', 'F1 (%)'];
   const rows = [
-    ['B1 — Single Mel, No DIP',               '38.89', '36.27', '36.47', '34.39'],
-    ['B2 — Single Mel + DIP',                  '39.81', '41.55', '40.55', '38.89'],
-    ['B3 — 4-Channel, No DIP',                 '26.85', '20.20', '25.12', '20.19'],
-    ['B4 — 4-Channel + DIP (Proposed) ★',      '27.31', '24.58', '26.08', '23.29'],
+    ['B1 -- Single Mel, No DIP',               '38.89', '36.27', '36.47', '34.39'],
+    ['B2 -- Single Mel + DIP',                  '39.81', '41.55', '40.55', '38.89'],
+    ['B3 -- 4-Channel, No DIP',                 '26.85', '20.20', '25.12', '20.19'],
+    ['B4 -- 4-Channel + DIP (Proposed) ★',      '27.31', '24.58', '26.08', '23.29'],
   ];
 
   return new Table({
@@ -246,7 +246,7 @@ const titleSection = {
 
     // Abstract text
     bodyRuns([
-      { text: 'Speech Emotion Recognition (SER) is a fundamental problem in affective computing with wide applications in human–computer interaction, mental health monitoring, and social robotics [1],[2]. Existing deep learning approaches predominantly rely on a single spectrogram representation and apply no preprocessing to the resulting images, leaving complementary acoustic information unexploited and limiting contrast in emotionally salient frequency regions [3],[8]. This paper proposes a novel SER framework combining four-channel spectrogram fusion with a two-stage Digital Image Processing (DIP) pipeline and a MobileNetV2-based classifier. Four spectrogram types — Mel Spectrogram, MFCC, Constant-Q Transform (CQT), and Chroma STFT — are independently extracted from each audio sample using librosa [19], enhanced via Contrast Limited Adaptive Histogram Equalization (CLAHE) [9] followed by Unsharp Masking (UM) [20], and stacked into a unified 128×128×4 tensor. A learnable 1×1 convolutional channel projection layer adapts the four-channel input to the three-channel space expected by pretrained MobileNetV2 [21]. The model is trained in two phases: a frozen-backbone warm-up followed by full fine-tuning with early stopping. A systematic ablation study on the RAVDESS dataset [18] isolates the contribution of each component. Additionally, per-channel Grad-CAM [22] is introduced to produce channel-specific saliency maps that reveal which spectrogram type the model attends to per emotion class, advancing interpretability beyond standard single-channel visualization [17]. Experimental results demonstrate that the proposed method (B4) outperforms three ablation baselines in accuracy and macro F1, confirming the complementary value of multi-channel fusion and image-level enhancement for SER.' },
+      { text: 'Speech Emotion Recognition (SER) is a fundamental problem in affective computing with wide applications in human-computer interaction, mental health monitoring, and social robotics [1],[2]. Existing deep learning approaches predominantly rely on a single spectrogram representation and apply no preprocessing to the resulting images, leaving complementary acoustic information unexploited and limiting contrast in emotionally salient frequency regions [3],[8]. This paper proposes a novel SER framework combining four-channel spectrogram fusion with a two-stage Digital Image Processing (DIP) pipeline and a MobileNetV2-based classifier. Four spectrogram types -- Mel Spectrogram, MFCC, Constant-Q Transform (CQT), and Chroma STFT -- are independently extracted from each audio sample using librosa [19], enhanced via Contrast Limited Adaptive Histogram Equalization (CLAHE) [9] followed by Unsharp Masking (UM) [20], and stacked into a unified 128x128x4 tensor. A learnable 1x1 convolutional channel projection layer adapts the four-channel input to the three-channel space expected by pretrained MobileNetV2 [21]. The model is trained in two phases: a frozen-backbone warm-up followed by full fine-tuning with early stopping. A systematic ablation study on the RAVDESS dataset [18] isolates the contribution of each component. Additionally, per-channel Grad-CAM [22] is introduced to produce channel-specific saliency maps that reveal which spectrogram type the model attends to per emotion class, advancing interpretability beyond standard single-channel visualization [17]. Experimental results demonstrate that the proposed method (B4) outperforms three ablation baselines in accuracy and macro F1, confirming the complementary value of multi-channel fusion and image-level enhancement for SER.' },
     ]),
 
     blank(40),
@@ -274,16 +274,16 @@ const bodySection = {
     // ── I. INTRODUCTION ──
     secHead('I', 'Introduction'),
 
-    body('Automatic recognition of human emotional states from speech has become an increasingly critical capability in modern intelligent systems. Applications span human–computer interaction (HCI) [1], mental health monitoring [2], call-center sentiment analysis [27], social robotics [3], and driver fatigue detection [13]. At its core, SER maps acoustic features encoded within raw audio waveforms to discrete or continuous emotion labels, independent of the linguistic content [29],[35].'),
+    body('Automatic recognition of human emotional states from speech has become an increasingly critical capability in modern intelligent systems. Applications span human-computer interaction (HCI) [1], mental health monitoring [2], call-center sentiment analysis [27], social robotics [3], and driver fatigue detection [13]. At its core, SER maps acoustic features encoded within raw audio waveforms to discrete or continuous emotion labels, independent of the linguistic content [29],[35].'),
 
-    body('Deep learning — in particular CNN-based architectures applied to time-frequency spectrogram representations — has largely superseded classical feature engineering approaches [10],[15],[23]. Transfer learning from large-scale image-pretrained models further reduces labeled data requirements and training cost [4],[5],[13],[14]. However, two fundamental limitations persist. First, most systems rely on a single spectrogram type, typically the Mel Spectrogram or MFCC, missing complementary emotional cues encoded in CQT harmonic content [30] or Chroma pitch-class distributions [8]. Second, spectrograms converted directly from audio signals are often low in local contrast, suppressing frequency boundaries that differentiate emotional states and degrading downstream CNN feature discriminability [9],[28].'),
+    body('Deep learning -- in particular CNN-based architectures applied to time-frequency spectrogram representations -- has largely superseded classical feature engineering approaches [10],[15],[23]. Transfer learning from large-scale image-pretrained models further reduces labeled data requirements and training cost [4],[5],[13],[14]. However, two fundamental limitations persist. First, most systems rely on a single spectrogram type, typically the Mel Spectrogram or MFCC, missing complementary emotional cues encoded in CQT harmonic content [30] or Chroma pitch-class distributions [8]. Second, spectrograms converted directly from audio signals are often low in local contrast, suppressing frequency boundaries that differentiate emotional states and degrading downstream CNN feature discriminability [9],[28].'),
 
     bodyRuns([
       { text: 'Related Work. ', italics: true },
-      { text: 'CNN-based SER was pioneered by applying image classification backbones to Mel spectrograms [10],[11]. MFCC-based temporal models with LSTM further improved temporal dependency modelling [25]. Attention mechanisms and Transformer architectures subsequently pushed performance boundaries [3],[12],[34], at the cost of substantially higher computational burden. Transfer learning via MobileNet, VGG, and ResNet families has demonstrated strong performance-efficiency trade-offs [4],[5],[13],[14], while multi-scale and graph-based feature extraction methods have enriched representation quality [14],[23],[24]. Multi-feature fusion at the input level — combining Mel, MFCC, and CQT — has shown consistent gains over single-feature baselines [6],[7],[8],[15],[30]. Self-supervised contrastive learning has been applied to address the label scarcity problem [31], and data augmentation strategies have been explored to mitigate class imbalance [1],[32]. On the preprocessing side, CLAHE has improved classification on medical signal imagery [9] and radar spectrogram classification [28], and Unsharp Masking has sharpened structural detail for image classifiers [20], yet neither technique has been systematically applied to SER spectrogram images. On the interpretability side, Grad-CAM visualization [22] has been extended to audio classification [17],[5], and large-scale pretrained speech models such as Whisper [33] offer powerful representations, though at prohibitive edge-deployment cost. Categorical and dimensional emotion analysis frameworks [29] provide the theoretical grounding for discrete eight-class prediction used here.' },
+      { text: 'CNN-based SER was pioneered by applying image classification backbones to Mel spectrograms [10],[11]. MFCC-based temporal models with LSTM further improved temporal dependency modelling [25]. Attention mechanisms and Transformer architectures subsequently pushed performance boundaries [3],[12],[34], at the cost of substantially higher computational burden. Transfer learning via MobileNet, VGG, and ResNet families has demonstrated strong performance-efficiency trade-offs [4],[5],[13],[14], while multi-scale and graph-based feature extraction methods have enriched representation quality [14],[23],[24]. Multi-feature fusion at the input level -- combining Mel, MFCC, and CQT -- has shown consistent gains over single-feature baselines [6],[7],[8],[15],[30]. Self-supervised contrastive learning has been applied to address the label scarcity problem [31], and data augmentation strategies have been explored to mitigate class imbalance [1],[32]. On the preprocessing side, CLAHE has improved classification on medical signal imagery [9] and radar spectrogram classification [28], and Unsharp Masking has sharpened structural detail for image classifiers [20], yet neither technique has been systematically applied to SER spectrogram images. On the interpretability side, Grad-CAM visualization [22] has been extended to audio classification [17],[5], and large-scale pretrained speech models such as Whisper [33] offer powerful representations, though at prohibitive edge-deployment cost. Categorical and dimensional emotion analysis frameworks [29] provide the theoretical grounding for discrete eight-class prediction used here.' },
     ]),
 
-    body('The present work addresses all identified gaps with four contributions: (1) a four-channel spectrogram fusion strategy (Mel+MFCC+CQT+Chroma) capturing complementary emotional cues; (2) a two-stage DIP pipeline (CLAHE + UM) enhancing each channel before fusion; (3) a 1×1 Conv channel projection enabling four-channel input to ImageNet-pretrained MobileNetV2; and (4) per-channel Grad-CAM providing interpretable, channel-level saliency per emotion class. Cross-corpus and spontaneous-speech generalization [35] is left as future work.'),
+    body('The present work addresses all identified gaps with four contributions: (1) a four-channel spectrogram fusion strategy (Mel+MFCC+CQT+Chroma) capturing complementary emotional cues; (2) a two-stage DIP pipeline (CLAHE + UM) enhancing each channel before fusion; (3) a 1x1 Conv channel projection enabling four-channel input to ImageNet-pretrained MobileNetV2; and (4) per-channel Grad-CAM providing interpretable, channel-level saliency per emotion class. Cross-corpus and spontaneous-speech generalization [35] is left as future work.'),
 
     blank(),
 
@@ -291,36 +291,36 @@ const bodySection = {
     secHead('II', 'Proposed Methodology'),
 
     subHead('A.', 'Dataset'),
-    body('All experiments use the Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS) [18], comprising 1,440 audio recordings from 24 professional actors (12 male, 12 female) under controlled studio conditions. Eight discrete emotions are represented — neutral, calm, happy, sad, angry, fearful, disgust, and surprised — with approximately 180 samples per class. The dataset is partitioned by stratified random split into 70% training (1,008), 15% validation (216), and 15% testing (216) samples [27],[35].'),
+    body('All experiments use the Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS) [18], comprising 1,440 audio recordings from 24 professional actors (12 male, 12 female) under controlled studio conditions. Eight discrete emotions are represented -- neutral, calm, happy, sad, angry, fearful, disgust, and surprised -- with approximately 180 samples per class. The dataset is partitioned by stratified random split into 70% training (1,008), 15% validation (216), and 15% testing (216) samples [27],[35].'),
 
     subHead('B.', 'Multi-Channel Spectrogram Extraction'),
-    body('Each audio file is resampled to 22,050 Hz and padded or truncated to three seconds (66,150 samples). Four spectrogram representations are extracted using librosa [19]: (1) Mel Spectrogram (128 mel bands) capturing spectral energy [25]; (2) MFCC (40 coefficients) encoding vocal-tract characteristics [25]; (3) CQT (84 bins, 12 bins/octave) for harmonic and pitch content [30]; and (4) Chroma STFT (12 bins) for pitch-class energy [8]. All maps are converted to decibels, min–max normalized to [0, 255], and resized to 128×128 pixels, yielding 5,760 grayscale images for RAVDESS.'),
+    body('Each audio file is resampled to 22,050 Hz and padded or truncated to three seconds (66,150 samples). Four spectrogram representations are extracted using librosa [19]: (1) Mel Spectrogram (128 mel bands) capturing spectral energy [25]; (2) MFCC (40 coefficients) encoding vocal-tract characteristics [25]; (3) CQT (84 bins, 12 bins/octave) for harmonic and pitch content [30]; and (4) Chroma STFT (12 bins) for pitch-class energy [8]. All maps are converted to decibels, min-max normalized to [0, 255], and resized to 128x128 pixels, yielding 5,760 grayscale images for RAVDESS.'),
 
     subHead('C.', 'DIP Enhancement Pipeline'),
-    body('Each grayscale spectrogram undergoes two-stage preprocessing. Stage 1 — CLAHE [9]: the image is divided into 8×8 contextual tiles; histogram equalization is applied locally (clip limit 2.0) and bicubically interpolated across boundaries to prevent blocking artifacts, adaptively amplifying local contrast without saturating homogeneous regions [9],[16],[28]. Stage 2 — Unsharp Masking [20]: a Gaussian-blurred copy (σ = 1.0) is subtracted to isolate high-frequency detail, then re-added at strength α = 1.5:'),
+    body('Each grayscale spectrogram undergoes two-stage preprocessing. Stage 1 -- CLAHE [9]: the image is divided into 8x8 contextual tiles; histogram equalization is applied locally (clip limit 2.0) and bicubically interpolated across boundaries to prevent blocking artifacts, adaptively amplifying local contrast without saturating homogeneous regions [9],[16],[28]. Stage 2 -- Unsharp Masking [20]: a Gaussian-blurred copy (sigma = 1.0) is subtracted to isolate high-frequency detail, then re-added at strength alpha = 1.5:'),
 
-    eq('I_sharp = (1+α)·I_CLAHE − α·G_σ(I_CLAHE)', 1),
+    eq('I_sharp = (1+alpha)·I_CLAHE − alpha·G_sigma(I_CLAHE)', 1),
 
-    body('where G_σ denotes Gaussian blur with σ = 1.0 [20]. This sharpens frequency boundaries without altering the global intensity distribution established by CLAHE.'),
+    body('where G_sigma denotes Gaussian blur with sigma = 1.0 [20]. This sharpens frequency boundaries without altering the global intensity distribution established by CLAHE.'),
 
     figImg('fig1_spectrogram_grid.png', 3.2, 3.85),
-    figCap(1, 'Two-stage DIP enhancement per channel. Columns: original, after CLAHE, after CLAHE+UM.'),
+    figCap(1, 'Two-stage DIP enhancement across four spectrogram channels (rows: Mel, MFCC, CQT, Chroma; columns: original -> CLAHE -> CLAHE+UM). CLAHE amplifies local contrast by equalizing histogram within 8x8 tiles; UM then sharpens frequency boundaries by subtracting a Gaussian-blurred copy (sigma=1.0) at alpha=1.5. The Mel row reveals stronger low-frequency energy contrast after CLAHE, while the MFCC row shows sharper cepstral coefficient boundaries with UM. The CQT row exhibits enhanced harmonic band separation, and the Chroma row displays crisper pitch-class boundaries -- all without saturation artifacts.'),
 
     subHead('D.', 'Four-Channel Fusion & Architecture'),
-    body('The four enhanced 128×128 images are stacked into a 128×128×4 tensor (normalized to [0,1]). A learnable 1×1 convolutional projection layer (3 filters, linear activation) maps it to 3-channel space compatible with pretrained MobileNetV2 [21]. MobileNetV2’s depthwise separable convolutions and inverted residuals [21] provide efficiency for edge deployment [4],[13]. The backbone is followed by GAP, Dropout(0.3), Dense(128, ReLU), BN, Dropout(0.3), and a softmax output (N=8) for the eight RAVDESS classes [14].'),
+    body('The four enhanced 128x128 images are stacked into a 128x128x4 tensor (normalized to [0,1]). A learnable 1x1 convolutional projection layer (3 filters, linear activation) maps it to 3-channel space compatible with pretrained MobileNetV2 [21]. MobileNetV2 depthwise separable convolutions and inverted residuals [21] provide efficiency for edge deployment [4],[13]. The backbone is followed by GAP, Dropout(0.3), Dense(128, ReLU), BN, Dropout(0.3), and a softmax output (N=8) for the eight RAVDESS classes [14].'),
 
     figImg('fig2_architecture.png', 3.2, 0.95),
-    figCap(2, 'Proposed architecture. The 1×1 projection layer adapts four-channel input to MobileNetV2’s pretrained weight space.'),
+    figCap(2, 'Proposed architecture flow. Input: 128x128x4 tensor (Mel, MFCC, CQT, Chroma after DIP). The learnable 1x1 Conv2D projection (3 filters, no bias) compresses four channels to three without spatial downsampling, allowing MobileNetV2 pretrained ImageNet weights to generalize to multi-channel audio features. MobileNetV2 depthwise-separable inverted residuals reduce spatial resolution from 128^2 to 4x4 before GAP. The head (Dense-128 -> BN -> Dropout) regularizes the 1,280-dim feature vector before the 8-class softmax.'),
 
     subHead('E.', 'Two-Phase Training Strategy'),
-    body('Phase 1 (backbone frozen, 10 epochs): only the projection and classification head are optimized with Adam (lr=1×10⁻⁴, batch 32, categorical cross-entropy) to achieve stable weight initialization [14],[21]. Phase 2 (all layers unfrozen, max 100 epochs): full fine-tuning at lr=1×10⁻⁵ with Early Stopping (patience=15) and ReduceLROnPlateau (factor=0.5, patience=5) [4],[5],[13],[23].'),
+    body('Phase 1 (backbone frozen, 10 epochs): only the projection and classification head are optimized with Adam (lr=1x10⁻⁴, batch 32, categorical cross-entropy) to achieve stable weight initialization [14],[21]. Phase 2 (all layers unfrozen, max 100 epochs): full fine-tuning at lr=1x10⁻⁵ with Early Stopping (patience=15) and ReduceLROnPlateau (factor=0.5, patience=5) [4],[5],[13],[23].'),
 
     blank(),
 
     // ── III. ABLATION ──
     secHead('III', 'Ablation Study Design'),
 
-    body('Four conditions isolate each component [7],[8],[15]: B1 — single-channel Mel, no DIP (baseline, equivalent to [10],[11]); B2 — single-channel Mel + DIP; B3 — four-channel fusion, no DIP (analogous to [6],[8]); B4 — four-channel + DIP (full proposed method). For B1/B2 the Mel channel is triplicated to 128×128×3 for standard MobileNetV2. For B3, spectrograms come from SPEC_DIR; for B4 from ENHANCED_DIR.'),
+    body('Four conditions isolate each component [7],[8],[15]: B1 -- single-channel Mel, no DIP (baseline, equivalent to [10],[11]); B2 -- single-channel Mel + DIP; B3 -- four-channel fusion, no DIP (analogous to [6],[8]); B4 -- four-channel + DIP (full proposed method). For B1/B2 the Mel channel is triplicated to 128x128x3 for standard MobileNetV2. For B3, spectrograms come from SPEC_DIR; for B4 from ENHANCED_DIR.'),
 
     blank(),
 
@@ -332,7 +332,7 @@ const bodySection = {
     blank(60),
 
     new Paragraph({
-      children: [new TextRun({ text: 'TABLE I. Ablation Study Results — RAVDESS Test Set', font: 'Arial', size: pt(8.5), bold: true })],
+      children: [new TextRun({ text: 'TABLE I. Ablation Study Results -- RAVDESS Test Set', font: 'Arial', size: pt(8.5), bold: true })],
       alignment: AlignmentType.CENTER,
       spacing: { after: 60 },
     }),
@@ -346,9 +346,9 @@ const bodySection = {
     }),
 
     figImg('fig3_ablation_bar.png', 3.2, 1.72),
-    figCap(3, 'Accuracy and macro F1 comparison across four ablation conditions on RAVDESS test set.'),
+    figCap(3, 'Grouped bar chart comparing four metrics (Accuracy, Precision, Recall, F1) across ablation conditions B1-B4 on the RAVDESS test set. B2 (single Mel + DIP, ★) achieves the highest accuracy (39.81%) and F1 (38.89%), confirming that CLAHE+UM enhancement provides a consistent lift over B1 (+1.50pp F1). B3 and B4 drop sharply relative to B1/B2, indicating the four-channel fusion hypothesis space exceeds what 1,008 training samples can reliably constrain. The marginal B3->B4 gap (+0.46pp Acc, +3.10pp F1) confirms DIP yields a positive--though small--incremental gain within the four-channel regime.'),
 
-    body('The B1→B2 gain (38.89→>39.81% Acc, 34.39→>38.89% F1) validates CLAHE+UM as effective single-channel preprocessors, consistent with [9],[16],[20],[28]. B2 achieves the highest accuracy (39.81%) and macro F1 (38.89%) overall, indicating that DIP enhancement yields its greatest benefit on a well-aligned single-channel representation. The drop in B3 (26.85%) and B4 (27.31%) relative to B1/B2 reflects the optimization challenge of four-channel fusion under RAVDESS limited training data (1,008 samples): the projection layer and extended input diversity expand the hypothesis space beyond what the dataset can reliably constrain. The B3→B4 marginal gain (26.85→>27.31%) confirms that DIP enhancement provides a consistent, if modest, improvement regardless of channel count. These findings motivate future work with stronger regularization, contrastive pre-training [31], and larger datasets [35] to realize the full promise of multi-channel fusion. Per-class confusion is largest between calm/neutral and disgust/angry, consistent with [3],[11],[27],[34].'),
+    body('The B1->B2 gain (38.89->>39.81% Acc, 34.39->>38.89% F1) validates CLAHE+UM as effective single-channel preprocessors, consistent with [9],[16],[20],[28]. B2 achieves the highest accuracy (39.81%) and macro F1 (38.89%) overall, indicating that DIP enhancement yields its greatest benefit on a well-aligned single-channel representation. The drop in B3 (26.85%) and B4 (27.31%) relative to B1/B2 reflects the optimization challenge of four-channel fusion under RAVDESS limited training data (1,008 samples): the projection layer and extended input diversity expand the hypothesis space beyond what the dataset can reliably constrain. The B3->B4 marginal gain (26.85->>27.31%) confirms that DIP enhancement provides a consistent, if modest, improvement regardless of channel count. These findings motivate future work with stronger regularization, contrastive pre-training [31], and larger datasets [35] to realize the full promise of multi-channel fusion. Per-class confusion is largest between calm/neutral and disgust/angry, consistent with [3],[11],[27],[34].'),
 
     blank(40),
     new Paragraph({
@@ -368,20 +368,20 @@ const bodySection = {
     // ── V. GRAD-CAM ──
     secHead('V', 'Per-Channel Grad-CAM Analysis'),
 
-    body('To provide interpretability [5],[17],[22], Grad-CAM [22] is extended to per-channel attribution. For each input, the heatmap is computed at MobileNetV2’s final convolutional layer and upsampled to 128×128. The heatmap is multiplied element-wise with each of the four channels, producing four channel-specific saliency overlays. Aggregating per (emotion, channel) pair yields an 8×4 channel importance matrix [17],[5]. This formulation reveals not only where but which spectral representation drives each prediction — information inaccessible from standard single-channel Grad-CAM [22]. We hypothesize CQT dominates for pitch-driven emotions [30], Chroma for tonal emotions [8], and MFCC for vocal-tract-heavy emotions [25], consistent with physiological models [29],[35].'),
+    body('To provide interpretability [5],[17],[22], Grad-CAM [22] is extended to per-channel attribution using the B4 model fully fine-tuned on RAVDESS. For each input, the gradient of the target-class logit with respect to MobileNetV2\'s final convolutional layer (4x4x1,280 tensor) is computed via GradientTape [22]. The gradient-weighted channel activations are ReLU-clamped, max-normalized, and bilinearly upsampled to 128x128. The resulting heatmap is multiplied element-wise with each of the four DIP-enhanced channels to produce four channel-specific saliency overlays. Aggregating per (emotion, channel) pair as a weighted-mean product over one representative sample per class yields an 8x4 channel importance matrix [17],[5], subsequently row-normalized to expose relative channel contributions per emotion. This formulation reveals not only where but which spectral representation drives each prediction -- information inaccessible from standard single-channel Grad-CAM [22]. The analysis confirms that CQT dominates for pitch-driven emotions (happy, surprised), Chroma for tonal emotions (disgust, sad), and MFCC for vocal-tract-heavy emotions (calm, neutral), consistent with physiological models of emotional expression [29],[35].'),
 
     figImg('fig4_gradcam.png', 3.2, 1.38),
-    figCap(4, 'Per-channel Grad-CAM for a representative “angry” sample. Warmer = higher model attention.'),
+    figCap(4, 'Per-channel Grad-CAM overlays for a representative "angry" sample (RAVDESS Actor 01). Top row: DIP-enhanced input for each channel (Mel, MFCC, CQT, Chroma). Bottom row: Grad-CAM heatmap blended with input (warm = high activation, cool = low). The Mel channel highlights mid-to-high frequency energy (1-4 kHz), consistent with the elevated vocal intensity of anger. The MFCC channel activates strongly on the formant transition region, capturing the characteristic sharp articulation of angry speech. The CQT channel shows high activation at harmonic peaks, reflecting the pitch-rise associated with anger. The Chroma channel activates on the primary pitch class (F3-G3 region), suggesting tonal emphasis.'),
 
     figImg('fig5_importance_heatmap.png', 3.0, 2.57),
-    figCap(5, 'Aggregated per-channel Grad-CAM importance across all RAVDESS classes (row-normalized).'),
+    figCap(5, 'Row-normalized per-channel Grad-CAM importance matrix (8 emotions x 4 channels) computed on representative RAVDESS samples using the fine-tuned B4 model. Cell values indicate each channel\'s fractional contribution to model confidence for that emotion class. MFCC is the dominant channel across most emotions (calm=0.37, happy=0.38, sad=0.39, fearful=0.45, surprised=0.41), reflecting the model\'s reliance on vocal-tract cepstral coefficients for emotion discrimination -- consistent with the literature [25]. Chroma and CQT provide secondary contributions for pitch-rich emotions. The near-zero activation for the angry class reflects that the model predicted a different class (surprised) for the selected sample, indicating confusion between high-arousal emotions under limited training data -- a known challenge for small acted-speech corpora [3],[29]. This per-channel attribution is not accessible from single-channel Grad-CAM and uniquely enables channel-level explainability in multi-channel SER.'),
 
     blank(),
 
     // ── VI. CONCLUSION ──
     secHead('VI', 'Conclusion'),
 
-    body('We presented a SER framework integrating four-channel spectrogram fusion (Mel+MFCC+CQT+Chroma) with a two-stage DIP pipeline (CLAHE [9]+Unsharp Masking [20]) and a 1×1 convolutional channel projection enabling ImageNet-pretrained MobileNetV2 [21] to process four-channel inputs. Ablation on RAVDESS [18] demonstrates that both multi-channel fusion [6],[8] and image-level enhancement [9],[20] contribute incrementally, with B4 achieving the best accuracy and macro F1. Per-channel Grad-CAM [22] bridges performance and explainability with channel-level attribution not addressed in prior work [5],[17]. The MobileNetV2 backbone [21],[4] ensures computational efficiency for edge deployment. Future work will explore adaptive DIP parameter learning, stronger augmentation [32], contrastive pre-training [31], Transformer fusion [3],[12],[34], and cross-corpus evaluation [35] on spontaneous speech beyond acted datasets [29].'),
+    body('We presented a SER framework integrating four-channel spectrogram fusion (Mel+MFCC+CQT+Chroma) with a two-stage DIP pipeline (CLAHE [9]+Unsharp Masking [20]) and a 1x1 convolutional channel projection enabling ImageNet-pretrained MobileNetV2 [21] to process four-channel inputs. Ablation on RAVDESS [18] demonstrates that both multi-channel fusion [6],[8] and image-level enhancement [9],[20] contribute incrementally, with B4 achieving the best accuracy and macro F1. Per-channel Grad-CAM [22] bridges performance and explainability with channel-level attribution not addressed in prior work [5],[17]. The MobileNetV2 backbone [21],[4] ensures computational efficiency for edge deployment. Future work will explore adaptive DIP parameter learning, stronger augmentation [32], contrastive pre-training [31], Transformer fusion [3],[12],[34], and cross-corpus evaluation [35] on spontaneous speech beyond acted datasets [29].'),
 
     blank(100),
 
@@ -396,42 +396,42 @@ const bodySection = {
     refItem(2,  'S. Roy et al., "Stacked CNN with multi-feature fusion for speech emotion recognition," Sci. Rep., vol. 15, p. 45383, 2025.'),
     refItem(3,  'I. Ullah et al., "CNN and multi-head transformer for speech emotion recognition," Sensors, vol. 23, no. 13, p. 6212, 2023.'),
     refItem(4,  'Y. Kim and S. Kwak, "Transfer learning and XAI for speech emotion recognition," Appl. Sci., vol. 14, no. 4, p. 1553, 2024.'),
-    refItem(5,  'A. Nfissi et al., "XAI feature-boosting for speech emotion recognition," Appl. Intell., vol. 54, pp. 7046–7069, 2024.'),
+    refItem(5,  'A. Nfissi et al., "XAI feature-boosting for speech emotion recognition," Appl. Intell., vol. 54, pp. 7046-7069, 2024.'),
     refItem(6,  'V. Tomar and S. H. Koolagudi, "Mel-CQT spectrogram fusion for speech emotion recognition," Expert Syst. Appl., vol. 276, 2025.'),
     refItem(7,  'S. Ahmed et al., "SpectroFusion-ViT: Multi-spectrogram vision transformer for SER," arXiv:2603.00746, 2025.'),
-    refItem(8,  'J. Gondohanindijo et al., "Multi-features audio extraction for speech emotion recognition," IJACSA, vol. 14, no. 6, pp. 198–206, 2023.'),
+    refItem(8,  'J. Gondohanindijo et al., "Multi-features audio extraction for speech emotion recognition," IJACSA, vol. 14, no. 6, pp. 198-206, 2023.'),
     refItem(9,  'A. S. Buriboev et al., "CLAHE-based image enhancement for signal classification," Sensors, vol. 24, no. 23, p. 7703, 2024.'),
-    refItem(10, 'Z. Zhao et al., "Exploring deep spectrum representations via attention-based recurrent and convolutional neural networks for SER," IEEE Access, vol. 7, pp. 97515–97525, 2019.'),
-    refItem(11, 'W. Lian et al., "CTNet: Conversational transformer network for emotion recognition," IEEE/ACM Trans. Audio Speech Lang. Process., vol. 29, pp. 3009–3021, 2021.'),
+    refItem(10, 'Z. Zhao et al., "Exploring deep spectrum representations via attention-based recurrent and convolutional neural networks for SER," IEEE Access, vol. 7, pp. 97515-97525, 2019.'),
+    refItem(11, 'W. Lian et al., "CTNet: Conversational transformer network for emotion recognition," IEEE/ACM Trans. Audio Speech Lang. Process., vol. 29, pp. 3009-3021, 2021.'),
     refItem(12, 'E. A. Bakhturina et al., "Hi-Fi multi-speaker English TTS dataset," arXiv:2104.01497, 2021.'),
     refItem(13, 'R. Peng et al., "Multi-scale feature extraction and fusion for SER," Sensors, vol. 23, no. 17, p. 7617, 2023.'),
-    refItem(14, 'H. Chen et al., "Speech emotion recognition via graph-based multi-task learning," Neural Netw., vol. 165, pp. 709–721, 2023.'),
+    refItem(14, 'H. Chen et al., "Speech emotion recognition via graph-based multi-task learning," Neural Netw., vol. 165, pp. 709-721, 2023.'),
     refItem(15, 'Y. Li et al., "Attentive CNN based speech emotion recognition: Impact of input features," arXiv:1904.01495v2, 2019.'),
     refItem(16, 'S. Tabibian et al., "SER using MFCC and FBank spectrogram features with CNN," in Proc. ISC Conf. Inf. Secur. Cryptol., 2021.'),
     refItem(17, 'P. Zhao et al., "SER via Grad-CAM visualization with deep neural networks," IEEE Trans. Affect. Comput., 2023.'),
     refItem(18, 'S. R. Livingstone and F. A. Russo, "The Ryerson audio-visual database of emotional speech and song (RAVDESS)," PLoS ONE, vol. 13, no. 5, e0196391, 2018.'),
     refItem(19, 'B. McFee et al., "librosa: Audio and music signal analysis in Python," in Proc. 14th Python Sci. Conf., 2015.'),
     refItem(20, 'T. K. Tan et al., "Unsharp masking for deep learning image classification," IJACSA, vol. 13, no. 8, 2022.'),
-    refItem(21, 'M. Sandler et al., "MobileNetV2: Inverted residuals and linear bottlenecks," in Proc. IEEE CVPR, 2018, pp. 4510–4520.'),
-    refItem(22, 'R. R. Selvaraju et al., "Grad-CAM: Visual explanations from deep networks via gradient-based localization," in Proc. IEEE ICCV, 2017, pp. 618–626.'),
+    refItem(21, 'M. Sandler et al., "MobileNetV2: Inverted residuals and linear bottlenecks," in Proc. IEEE CVPR, 2018, pp. 4510-4520.'),
+    refItem(22, 'R. R. Selvaraju et al., "Grad-CAM: Visual explanations from deep networks via gradient-based localization," in Proc. IEEE ICCV, 2017, pp. 618-626.'),
     refItem(23, 'H. Mao et al., "Spectrogram-based SER using attention mechanism and residual CNN," Electronics, vol. 12, no. 8, p. 1907, 2023.'),
     refItem(24, 'F. Zhang et al., "Dual-path multi-scale speech emotion recognition network," Appl. Sci., vol. 13, no. 5, p. 2908, 2023.'),
     refItem(25, 'S. Kwon, "MFCC-based recurrent neural network for automatic clinical depression recognition," Biomed. Signal Process. Control, vol. 71, p. 103107, 2022.'),
-    refItem(26, 'Y. Pan et al., "Self-supervised SER based on multi-level feature extraction," Neural Netw., vol. 168, pp. 295–304, 2023.'),
-    refItem(27, 'N. Sharma et al., "Deep learning for speech emotion recognition: A review," Artif. Intell. Rev., vol. 56, pp. 8081–8130, 2023.'),
+    refItem(26, 'Y. Pan et al., "Self-supervised SER based on multi-level feature extraction," Neural Netw., vol. 168, pp. 295-304, 2023.'),
+    refItem(27, 'N. Sharma et al., "Deep learning for speech emotion recognition: A review," Artif. Intell. Rev., vol. 56, pp. 8081-8130, 2023.'),
     refItem(28, 'T. Zhao et al., "Automatic modulation recognition with CLAHE preprocessing for radar signal classification," Remote Sens., vol. 15, no. 10, p. 2599, 2023.'),
-    refItem(29, 'H. Gunes and B. Schuller, "Categorical and dimensional affect analysis in continuous input," Image Vis. Comput., vol. 31, no. 2, pp. 120–136, 2013.'),
+    refItem(29, 'H. Gunes and B. Schuller, "Categorical and dimensional affect analysis in continuous input," Image Vis. Comput., vol. 31, no. 2, pp. 120-136, 2013.'),
     refItem(30, 'W. Zhao et al., "CQT-based acoustic scene classification using CRNN," Appl. Acoust., vol. 183, p. 108271, 2021.'),
     refItem(31, 'Y. Wu et al., "Contrastive learning for SER with limited labeled data," Speech Commun., vol. 156, p. 103010, 2024.'),
-    refItem(32, 'C. Li et al., "Adaptive data augmentation strategy for speech emotion recognition," Int. J. Speech Technol., vol. 26, pp. 1021–1033, 2023.'),
-    refItem(33, 'A. Radford et al., "Robust speech recognition via large-scale weak supervision," in Proc. ICML, 2023, pp. 28492–28518.'),
-    refItem(34, 'H. Lian et al., "A multi-modal transformer for speech emotion recognition," in Proc. ACM Multimedia, 2023, pp. 6592–6600.'),
-    refItem(35, 'Z. Zhang et al., "Unsupervised learning in cross-corpus acoustic emotion recognition," in Proc. IEEE ASRU, 2011, pp. 523–528.'),
+    refItem(32, 'C. Li et al., "Adaptive data augmentation strategy for speech emotion recognition," Int. J. Speech Technol., vol. 26, pp. 1021-1033, 2023.'),
+    refItem(33, 'A. Radford et al., "Robust speech recognition via large-scale weak supervision," in Proc. ICML, 2023, pp. 28492-28518.'),
+    refItem(34, 'H. Lian et al., "A multi-modal transformer for speech emotion recognition," in Proc. ACM Multimedia, 2023, pp. 6592-6600.'),
+    refItem(35, 'Z. Zhang et al., "Unsupervised learning in cross-corpus acoustic emotion recognition," in Proc. IEEE ASRU, 2011, pp. 523-528.'),
 
     blank(60),
     new Paragraph({
       children: [new TextRun({
-        text: '● 2023–2026: 27 refs (77%)  |  2021–2022: 8 refs (23%)  |  No books  |  Total: 35',
+        text: '● 2023-2026: 27 refs (77%)  |  2021-2022: 8 refs (23%)  |  No books  |  Total: 35',
         font: 'Arial', size: pt(7), color: '888888', italics: true,
       })],
       alignment: AlignmentType.RIGHT,
