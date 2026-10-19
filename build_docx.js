@@ -126,11 +126,63 @@ function blank(after = 60) {
   return new Paragraph({ children: [], spacing: { after } });
 }
 
+// IEEE table caption: two lines — label (bold allCaps) then title (italic)
+function tableCap(label, title) {
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: label, font: 'Times New Roman', size: pt(8), bold: true, allCaps: true })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 0 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: title, font: 'Times New Roman', size: pt(8), italics: true })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 40 },
+    }),
+  ];
+}
+
 function hr() {
   return new Paragraph({
     children: [],
     border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' } },
     spacing: { after: 80 },
+  });
+}
+
+// ── IEEE table cell helper ────────────────────────────────────
+// IEEE: no vertical borders, no shading. Horizontal lines:
+//   top of header  → double (size 6)
+//   bottom of header → single (size 4)
+//   bottom of last row → single (size 4)
+// All other row borders → none
+function ieeeCell(text, colW, opts = {}) {
+  const { bold = false, align = AlignmentType.CENTER,
+          topBorder = 'none', bottomBorder = 'none', isHeader = false } = opts;
+
+  const makeBorder = (style, size) =>
+    style === 'none' ? { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+    : style === 'double' ? { style: BorderStyle.DOUBLE, size, color: '000000' }
+    : { style: BorderStyle.SINGLE, size, color: '000000' };
+
+  return new TableCell({
+    children: [new Paragraph({
+      children: [new TextRun({
+        text,
+        font: 'Times New Roman',
+        size: pt(8),
+        bold: bold || isHeader,
+      })],
+      alignment: align,
+      spacing: { before: 20, after: 20 },
+    })],
+    width: { size: colW, type: WidthType.DXA },
+    borders: {
+      top:    makeBorder(topBorder, topBorder === 'double' ? 6 : 4),
+      bottom: makeBorder(bottomBorder, 4),
+      left:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      right:  { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    },
   });
 }
 
@@ -146,35 +198,30 @@ function sotaTable() {
     ['Tomar & Koolagudi [6]',      'Mel+CQT (CNN)',      '72.0', '~4.1 M',  '2025'],
     ['Proposed B2',                'Mel+DIP (MobNetV2)', '39.8', '~3.5 M',  '2025'],
   ];
+  const lastRow = rows.length - 1;
 
   return new Table({
     width: { size: 4240, type: WidthType.DXA },
     columnWidths: colW,
+    borders: { insideH: { style: BorderStyle.NONE }, insideV: { style: BorderStyle.NONE } },
     rows: [
+      // Header row: double top, single bottom
       new TableRow({
         tableHeader: true,
-        children: headers.map((h, i) => new TableCell({
-          children: [new Paragraph({
-            children: [new TextRun({ text: h, font: 'Arial', size: pt(8), bold: true, color: 'FFFFFF' })],
-            alignment: AlignmentType.CENTER,
-          })],
-          width: { size: colW[i], type: WidthType.DXA },
-          shading: { type: ShadingType.CLEAR, fill: '444444' },
+        children: headers.map((h, i) => ieeeCell(h, colW[i], {
+          isHeader: true,
+          topBorder: 'double',
+          bottomBorder: 'single',
+          align: i === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
         })),
       }),
+      // Data rows
       ...rows.map((row, ri) => new TableRow({
-        children: row.map((val, ci) => new TableCell({
-          children: [new Paragraph({
-            children: [new TextRun({
-              text: val,
-              font: ci === 0 ? 'Times New Roman' : 'Arial',
-              size: pt(8),
-              bold: ri === rows.length - 1,
-              color: '222222',
-            })],
-            alignment: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
-          })],
-          width: { size: colW[ci], type: WidthType.DXA },
+        children: row.map((val, ci) => ieeeCell(val, colW[ci], {
+          bold: ri === lastRow,
+          align: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
+          topBorder: 'none',
+          bottomBorder: ri === lastRow ? 'single' : 'none',
         })),
       })),
     ],
@@ -183,44 +230,38 @@ function sotaTable() {
 
 // ── Ablation table ───────────────────────────────────────────
 function ablationTable() {
-  // Two-column layout: each column ~4320 twip. Table must fit within one column.
-  const colW = [1760, 620, 620, 620, 620]; // total 4240 twip — fits in one column
+  const colW = [1760, 620, 620, 620, 620]; // total 4240 twip
   const headers = ['Condition', 'Acc.', 'Prec.', 'Rec.', 'F1'];
   const rows = [
     ['B1 -- Mel, No DIP',          '38.89', '36.27', '36.47', '34.39'],
-    ['B2 -- Mel + DIP ★',          '39.81', '41.55', '40.55', '38.89'],
+    ['B2 -- Mel + DIP ★',     '39.81', '41.55', '40.55', '38.89'],
     ['B3 -- 4-Ch, No DIP',         '26.85', '20.20', '25.12', '20.19'],
     ['B4 -- 4-Ch + DIP',           '27.31', '24.58', '26.08', '23.29'],
   ];
+  const lastRow = rows.length - 1;
 
   return new Table({
     width: { size: 4240, type: WidthType.DXA },
     columnWidths: colW,
+    borders: { insideH: { style: BorderStyle.NONE }, insideV: { style: BorderStyle.NONE } },
     rows: [
+      // Header row: double top, single bottom
       new TableRow({
         tableHeader: true,
-        children: headers.map((h, i) => new TableCell({
-          children: [new Paragraph({
-            children: [new TextRun({ text: h, font: 'Arial', size: pt(8), bold: true, color: 'FFFFFF' })],
-            alignment: AlignmentType.CENTER,
-          })],
-          width: { size: colW[i], type: WidthType.DXA },
-          shading: { type: ShadingType.CLEAR, fill: '444444' },
+        children: headers.map((h, i) => ieeeCell(h, colW[i], {
+          isHeader: true,
+          topBorder: 'double',
+          bottomBorder: 'single',
+          align: i === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
         })),
       }),
+      // Data rows
       ...rows.map((row, ri) => new TableRow({
-        children: row.map((val, ci) => new TableCell({
-          children: [new Paragraph({
-            children: [new TextRun({
-              text: val,
-              font: ci === 0 ? 'Times New Roman' : 'Arial',
-              size: pt(8),
-              bold: ri === 1,
-              color: '222222',
-            })],
-            alignment: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
-          })],
-          width: { size: colW[ci], type: WidthType.DXA },
+        children: row.map((val, ci) => ieeeCell(val, colW[ci], {
+          bold: ri === 1,
+          align: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
+          topBorder: 'none',
+          bottomBorder: ri === lastRow ? 'single' : 'none',
         })),
       })),
     ],
@@ -391,13 +432,7 @@ const bodySection = {
 
     body('Table I reports test-set performance for each ablation condition. Macro-averaging is used throughout, as recommended for multi-class recognition tasks with approximately balanced classes [3],[7],[27]; all four metrics -- Accuracy, macro Precision, macro Recall, and macro F1 -- are reported jointly because optimising on Accuracy alone can mask per-class imbalances that are genuinely present at this corpus scale.'),
 
-    blank(60),
-
-    new Paragraph({
-      children: [new TextRun({ text: 'TABLE I. Ablation Study Results -- RAVDESS Test Set', font: 'Arial', size: pt(8.5), bold: true })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 60 },
-    }),
+    ...tableCap('TABLE I', 'Ablation Study Results — RAVDESS Test Set'),
 
     ablationTable(),
 
@@ -413,12 +448,7 @@ const bodySection = {
 
     body('The transition from single- to four-channel input tells a different story. B3 -- four channels, no DIP -- falls to 26.85% Accuracy and 20.19% F1, a substantial regression from B1 despite offering richer spectral information. One plausible explanation is that the increased input dimensionality and the extra degrees of freedom in the 1x1 projection layer expand the effective hypothesis space beyond what 1,008 training samples can reliably constrain. The additional channels introduce representational diversity that, under RAVDESS scale, manifests as added variance rather than reduced bias. B4 recovers partially over B3 (+0.46pp Accuracy, +3.10pp F1), confirming that DIP enhancement provides a consistent positive contribution regardless of channel count, yet B4 still falls well short of B2. Taken together, the ablation suggests that on small acted-speech corpora, preprocessing quality has a stronger per-sample effect than input-channel diversity. Multi-channel fusion should be revisited with larger, more diverse corpora [35], stronger data augmentation [32], or contrastive pre-training [31] that can exploit the complementary representations more effectively. Per-class analysis reveals that the most frequent confusions occur between acoustically similar emotion pairs -- calm and neutral, disgust and angry -- consistent with observations across RAVDESS-based studies [3],[11],[27],[34].'),
 
-    blank(40),
-    new Paragraph({
-      children: [new TextRun({ text: 'TABLE II. Per-Class F1-Score per Condition (RAVDESS Test Set)', font: 'Arial', size: pt(8.5), bold: true })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 60 },
-    }),
+    ...tableCap('TABLE II', 'Per-Class F1-Score per Condition (RAVDESS Test Set)'),
     figImg('fig_perclass_f1.png', 3.2, 1.07),
     new Paragraph({
       children: [new TextRun({ text: 'Fig. 6. Per-class macro F1 breakdown. Dashed line = macro average per condition.', font: 'Times New Roman', size: pt(8), italics: true })],
@@ -426,14 +456,10 @@ const bodySection = {
       spacing: { before: 20, after: 80 },
     }),
 
-    blank(80),
+    blank(40),
 
     // ── TABLE III: SotA Comparison ──
-    new Paragraph({
-      children: [new TextRun({ text: 'TABLE III. Comparison with Selected SER Methods on RAVDESS', font: 'Arial', size: pt(8.5), bold: true })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 60 },
-    }),
+    ...tableCap('TABLE III', 'Comparison with Selected SER Methods on RAVDESS'),
 
     sotaTable(),
 
