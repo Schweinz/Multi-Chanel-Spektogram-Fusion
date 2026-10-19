@@ -188,24 +188,47 @@ function ieeeCell(text, colW, opts = {}) {
 
 // ── Hyperparameter summary table ─────────────────────────────
 function hyperparamTable() {
-  const colW = [1900, 1040, 1300]; // total 4240 twip
+  const colW = [1300, 1760, 1180]; // total 4240 twip
+  const sz = pt(7.5); // slightly smaller font to keep rows single-line
   const headers = ['Hyperparameter', 'Value', 'Scope'];
   const rows = [
-    ['Input size',              '128×128×4 (or ×1)',       'Both phases'],
-    ['Optimiser',               'Adam (β₁=0.9, β₂=0.999)', 'Both phases'],
-    ['Loss function',           'Categorical cross-entropy', 'Both phases'],
-    ['Phase 1 learning rate',   '1×10⁻⁴',                  'Phase 1'],
-    ['Phase 1 epochs',          '10 (fixed)',               'Phase 1'],
-    ['Phase 2 learning rate',   '1×10⁻⁵',                  'Phase 2'],
-    ['Phase 2 max epochs',      '100',                      'Phase 2'],
-    ['Batch size',              '32',                       'Both phases'],
-    ['Early stopping patience', '15 epochs',                'Phase 2'],
-    ['ReduceLROnPlateau factor', '0.5 (patience=5)',        'Phase 2'],
-    ['Dropout rate',            '0.3 (×2 in head)',         'Both phases'],
-    ['Dense head units',        '128 (ReLU) → 8 (softmax)', 'Both phases'],
-    ['Backbone frozen',         'Yes (MobileNetV2)',        'Phase 1 only'],
+    ['Input size',      '128×128×4 (or ×1)',       'Both'],
+    ['Optimiser',       'Adam (β₁=0.9, β₂=0.999)', 'Both'],
+    ['Loss',            'Cat. cross-entropy',        'Both'],
+    ['Phase 1 LR',      '1×10⁻⁴',                  'Ph. 1'],
+    ['Phase 1 epochs',  '10 (fixed)',               'Ph. 1'],
+    ['Phase 2 LR',      '1×10⁻⁵',                  'Ph. 2'],
+    ['Phase 2 epochs',  '100 (max)',                'Ph. 2'],
+    ['Batch size',      '32',                       'Both'],
+    ['Early stop',      'patience=15, val. loss',   'Ph. 2'],
+    ['ReduceLR',        'factor=0.5, patience=5',   'Ph. 2'],
+    ['Dropout',         '0.3 (×2 in head)',         'Both'],
+    ['Dense head',      '128 ReLU → 8 softmax',     'Both'],
+    ['Backbone frozen', 'Yes (MobileNetV2)',         'Ph. 1'],
   ];
   const lastRow = rows.length - 1;
+
+  const makeHPCell = (text, colW, opts = {}) => {
+    const { bold = false, isHeader = false, topBorder = 'none', bottomBorder = 'none' } = opts;
+    const makeBorder = (style, size) =>
+      style === 'none'   ? { style: BorderStyle.NONE,   size: 0, color: 'FFFFFF' }
+      : style === 'double' ? { style: BorderStyle.DOUBLE, size, color: '000000' }
+      :                      { style: BorderStyle.SINGLE, size, color: '000000' };
+    return new TableCell({
+      children: [new Paragraph({
+        children: [new TextRun({ text, font: 'Times New Roman', size: sz, bold: bold || isHeader })],
+        alignment: AlignmentType.LEFT,
+        spacing: { before: 14, after: 14 },
+      })],
+      width: { size: colW, type: WidthType.DXA },
+      borders: {
+        top:    makeBorder(topBorder, topBorder === 'double' ? 6 : 4),
+        bottom: makeBorder(bottomBorder, 4),
+        left:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right:  { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+    });
+  };
 
   return new Table({
     width: { size: 4240, type: WidthType.DXA },
@@ -214,17 +237,12 @@ function hyperparamTable() {
     rows: [
       new TableRow({
         tableHeader: true,
-        children: headers.map((h, i) => ieeeCell(h, colW[i], {
-          isHeader: true,
-          topBorder: 'double',
-          bottomBorder: 'single',
-          align: AlignmentType.LEFT,
+        children: headers.map((h, i) => makeHPCell(h, colW[i], {
+          isHeader: true, topBorder: 'double', bottomBorder: 'single',
         })),
       }),
       ...rows.map((row, ri) => new TableRow({
-        children: row.map((val, ci) => ieeeCell(val, colW[ci], {
-          bold: false,
-          align: AlignmentType.LEFT,
+        children: row.map((val, ci) => makeHPCell(val, colW[ci], {
           topBorder: 'none',
           bottomBorder: ri === lastRow ? 'single' : 'none',
         })),
