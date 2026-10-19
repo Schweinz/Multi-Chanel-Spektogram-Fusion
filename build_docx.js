@@ -36,8 +36,8 @@ function bodyRuns(runs) {
 function secHead(num, title) {
   return new Paragraph({
     children: [
-      ...(num ? [new TextRun({ text: `${num}. `, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '1a3a5c' })] : []),
-      new TextRun({ text: title, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '1a3a5c' }),
+      ...(num ? [new TextRun({ text: `${num}. `, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' })] : []),
+      new TextRun({ text: title, font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' }),
     ],
     spacing: { before: 180, after: 60 },
     border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' } },
@@ -159,7 +159,7 @@ function sotaTable() {
             alignment: AlignmentType.CENTER,
           })],
           width: { size: colW[i], type: WidthType.DXA },
-          shading: { type: ShadingType.CLEAR, fill: '1a3a5c' },
+          shading: { type: ShadingType.CLEAR, fill: '444444' },
         })),
       }),
       ...rows.map((row, ri) => new TableRow({
@@ -170,7 +170,7 @@ function sotaTable() {
               font: ci === 0 ? 'Times New Roman' : 'Arial',
               size: pt(8),
               bold: ri === rows.length - 1,
-              color: ri === rows.length - 1 && ci > 0 ? '1a3a5c' : '222222',
+              color: '222222',
             })],
             alignment: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
           })],
@@ -205,7 +205,7 @@ function ablationTable() {
             alignment: AlignmentType.CENTER,
           })],
           width: { size: colW[i], type: WidthType.DXA },
-          shading: { type: ShadingType.CLEAR, fill: '1a3a5c' },
+          shading: { type: ShadingType.CLEAR, fill: '444444' },
         })),
       }),
       ...rows.map((row, ri) => new TableRow({
@@ -216,7 +216,7 @@ function ablationTable() {
               font: ci === 0 ? 'Times New Roman' : 'Arial',
               size: pt(8),
               bold: ri === 1,
-              color: ri === 1 && ci > 0 ? '1a3a5c' : '222222',
+              color: '222222',
             })],
             alignment: ci === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
           })],
@@ -276,7 +276,7 @@ const titleSection = {
     new Paragraph({
       children: [
         new TextRun({ text: '* Correspondence: ', font: 'Times New Roman', size: pt(8), italics: true }),
-        new TextRun({ text: 'jehezkielbeny123@gmail.com', font: 'Courier New', size: pt(8), color: '1a3a5c' }),
+        new TextRun({ text: 'jehezkielbeny123@gmail.com', font: 'Courier New', size: pt(8), color: '222222' }),
         new TextRun({ text: '   † Supervisor', font: 'Times New Roman', size: pt(8), italics: true }),
       ],
       alignment: AlignmentType.CENTER,
@@ -287,7 +287,7 @@ const titleSection = {
 
     // ABSTRACT heading
     new Paragraph({
-      children: [new TextRun({ text: 'ABSTRACT', font: 'Arial', size: pt(8), bold: true, color: '1a3a5c' })],
+      children: [new TextRun({ text: 'ABSTRACT', font: 'Arial', size: pt(8), bold: true, color: '000000' })],
       alignment: AlignmentType.CENTER,
       spacing: { after: 60 },
     }),
@@ -492,7 +492,7 @@ const bodySection = {
 
     // ── REFERENCES ──
     new Paragraph({
-      children: [new TextRun({ text: 'References', font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '1a3a5c' })],
+      children: [new TextRun({ text: 'References', font: 'Arial', size: pt(9.5), bold: true, allCaps: true, color: '000000' })],
       border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '222222' } },
       spacing: { before: 140, after: 80 },
     }),
