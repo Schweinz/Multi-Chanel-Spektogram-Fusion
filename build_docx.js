@@ -136,17 +136,18 @@ function hr() {
 
 // ── Ablation table ───────────────────────────────────────────
 function ablationTable() {
-  const colW = [3000, 1200, 1200, 1200, 1200]; // total 8800 twip
-  const headers = ['Condition', 'Acc. (%)', 'Prec. (%)', 'Rec. (%)', 'F1 (%)'];
+  // Two-column layout: each column ~4320 twip. Table must fit within one column.
+  const colW = [2000, 560, 560, 560, 560]; // total 4240 twip — fits in one column
+  const headers = ['Condition', 'Acc.', 'Prec.', 'Rec.', 'F1'];
   const rows = [
-    ['B1 -- Single Mel, No DIP',               '38.89', '36.27', '36.47', '34.39'],
-    ['B2 -- Single Mel + DIP',                  '39.81', '41.55', '40.55', '38.89'],
-    ['B3 -- 4-Channel, No DIP',                 '26.85', '20.20', '25.12', '20.19'],
-    ['B4 -- 4-Channel + DIP (Proposed) ★',      '27.31', '24.58', '26.08', '23.29'],
+    ['B1 -- Mel, No DIP',          '38.89', '36.27', '36.47', '34.39'],
+    ['B2 -- Mel + DIP ★',          '39.81', '41.55', '40.55', '38.89'],
+    ['B3 -- 4-Ch, No DIP',         '26.85', '20.20', '25.12', '20.19'],
+    ['B4 -- 4-Ch + DIP',           '27.31', '24.58', '26.08', '23.29'],
   ];
 
   return new Table({
-    width: { size: 8800, type: WidthType.DXA },
+    width: { size: 4240, type: WidthType.DXA },
     columnWidths: colW,
     rows: [
       new TableRow({
@@ -310,7 +311,7 @@ const bodySection = {
     subHead('D.', 'Four-Channel Fusion & Architecture'),
     body('The four enhanced 128x128 images are stacked into a 128x128x4 tensor (normalized to [0,1]). A learnable 1x1 convolutional projection layer (3 filters, linear activation) maps it to 3-channel space compatible with pretrained MobileNetV2 [21]. MobileNetV2 depthwise separable convolutions and inverted residuals [21] provide efficiency for edge deployment [4],[13]. The backbone is followed by GAP, Dropout(0.3), Dense(128, ReLU), BN, Dropout(0.3), and a softmax output (N=8) for the eight RAVDESS classes [14].'),
 
-    figImg('fig2_architecture.png', 3.2, 0.95),
+    figImg('fig2_architecture.png', 3.2, 1.35),
     figCap(2, 'Proposed SER architecture: 128x128x4 input through 1x1 Conv2D projection, MobileNetV2 backbone, and 8-class softmax head.'),
     body('Fig. 2 illustrates the complete end-to-end architecture. The 128x128x4 input tensor -- stacking four DIP-enhanced channels (Mel, MFCC, CQT, Chroma) -- first passes through a learnable 1x1 Conv2D projection layer (3 filters, no bias, linear activation) that compresses the four channels to three without any spatial downsampling. This allows the pretrained MobileNetV2 ImageNet weights to be applied directly to multi-channel audio features, preserving the rich low-level filter bank learned on natural images. MobileNetV2 employs depthwise-separable convolutions with inverted residual bottlenecks to progressively reduce spatial resolution from 128x128 down to 4x4, outputting a 1,280-dimensional Global Average Pooling (GAP) feature vector. The classification head consists of Dropout(0.3), Dense(128, ReLU), Batch Normalization, a second Dropout(0.3), and a final Dense(8) with softmax activation. This two-stage regularization (BN + dual Dropout) prevents co-adaptation of features while the GAP layer eliminates spatial inductive bias, making the model robust to temporal shifts in the spectrogram representations.'),
 
