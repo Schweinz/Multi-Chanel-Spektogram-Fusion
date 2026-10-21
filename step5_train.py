@@ -1,6 +1,6 @@
 """
 step5_train.py
-==============
+
 STEP KELIMA — training model MobileNetV2 dengan ablation study 4 kondisi.
 
 Arsitektur model (untuk kondisi B3 dan B4 — 4-channel input):
@@ -75,7 +75,7 @@ print(f"TensorFlow versi: {tf.__version__}")
 print(f"GPU tersedia: {tf.config.list_physical_devices('GPU')}")
 
 
-# ── LOAD DATASET ──────────────────────────────────────────────────────────────
+# LOAD DATASET
 
 def load_dataset_npz():
     """
@@ -100,7 +100,7 @@ def load_dataset_npz():
     return X_train, y_train, X_val, y_val, X_test, y_test
 
 
-# ── PERSIAPAN DATA PER KONDISI ABLASI ─────────────────────────────────────────
+# PERSIAPAN DATA PER KONDISI ABLASI 
 
 def prepare_ablation_data(X, condition):
     """
@@ -142,7 +142,7 @@ def load_b1_b3_data():
     return split_dataset(X_raw, y_raw)
 
 
-# ── ARSITEKTUR MODEL ──────────────────────────────────────────────────────────
+# ARSITEKTUR MODEL
 
 def build_model_4ch(n_classes=N_CLASSES):
     """
@@ -220,7 +220,7 @@ def build_model_3ch(n_classes=N_CLASSES):
     return model, base
 
 
-# ── TRAINING 2 FASE ───────────────────────────────────────────────────────────
+# TRAINING 2 FASE
 
 def train_model(model, base_model, X_tr, y_tr, X_vl, y_vl,
                 model_name, model_dir):
@@ -249,7 +249,7 @@ def train_model(model, base_model, X_tr, y_tr, X_vl, y_vl,
     y_tr_oh = to_categorical(y_tr, N_CLASSES)
     y_vl_oh = to_categorical(y_vl, N_CLASSES)
 
-    # ── Phase 1: Backbone frozen ─────────────────────────────────
+    # Phase 1: Backbone frozen
     print(f"\n[{model_name}] Phase 1: Training head (backbone frozen)...")
     model.compile(
         optimizer=Adam(LEARNING_RATE),
@@ -275,7 +275,7 @@ def train_model(model, base_model, X_tr, y_tr, X_vl, y_vl,
         verbose=1
     )
 
-    # ── Phase 2: Unfreeze semua layer ────────────────────────────
+    # Phase 2: Unfreeze semua layer
     print(f"\n[{model_name}] Phase 2: Fine-tuning semua layer...")
     base_model.trainable = True
 
@@ -315,7 +315,7 @@ def train_model(model, base_model, X_tr, y_tr, X_vl, y_vl,
     return hist1, hist2
 
 
-# ── VISUALISASI KURVA TRAINING ────────────────────────────────────────────────
+# VISUALISASI KURVA TRAINING
 
 def plot_training_history(hist1, hist2, model_name):
     """
@@ -357,7 +357,7 @@ def plot_training_history(hist1, hist2, model_name):
     print(f"Kurva training disimpan ke {out_path}")
 
 
-# ── MAIN: ABLATION STUDY ──────────────────────────────────────────────────────
+# MAIN: ABLATION STUDY
 
 if __name__ == "__main__":
     print("STEP 5: Training MobileNetV2 — Ablation Study B1 sampai B4")
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     # Dict untuk menyimpan hasil per kondisi
     ablation_results = {}
 
-    # ── B1: Single Mel, Tanpa DIP ─────────────────────────────────
+    # B1: Single Mel, Tanpa DIP
     print("\n" + "=" * 60)
     print("B1: Single-channel Mel, TANPA DIP — baseline sederhana")
     X_tr_b1 = prepare_ablation_data(X_tr_raw, 'B1')
@@ -395,7 +395,7 @@ if __name__ == "__main__":
         'y_test': y_ts_raw
     }
 
-    # ── B2: Single Mel, Dengan DIP ────────────────────────────────
+    # B2: Single Mel, Dengan DIP
     print("\n" + "=" * 60)
     print("B2: Single-channel Mel, DENGAN DIP")
     X_tr_b2 = prepare_ablation_data(X_train, 'B2')
@@ -414,7 +414,7 @@ if __name__ == "__main__":
         'y_test': y_test
     }
 
-    # ── B3: 4-Channel, Tanpa DIP ──────────────────────────────────
+    # B3: 4-Channel, Tanpa DIP
     print("\n" + "=" * 60)
     print("B3: 4-channel, TANPA DIP")
     model_b3, base_b3 = build_model_4ch()
@@ -431,7 +431,7 @@ if __name__ == "__main__":
         'y_test': y_ts_raw
     }
 
-    # ── B4: 4-Channel, Dengan DIP (METODE YANG DIUSULKAN) ─────────
+    # B4: 4-Channel, Dengan DIP (METODE YANG DIUSULKAN)
     print("\n" + "=" * 60)
     print("B4: 4-channel, DENGAN DIP — METODE YANG DIUSULKAN")
     model_b4, base_b4 = build_model_4ch()
@@ -448,9 +448,9 @@ if __name__ == "__main__":
         'y_test': y_test
     }
 
-    # ── Ringkasan Akurasi Test ────────────────────────────────────
+    # Ringkasan Akurasi Test
     print("\n" + "=" * 60)
-    print("RINGKASAN ABLATION STUDY — Akurasi pada Test Set")
+    print("RINGKASAN ABLATION STUDY Akurasi pada Test Set")
     print(f"{'Kondisi':<12} {'Test Accuracy':>14}")
     print("-" * 28)
 
