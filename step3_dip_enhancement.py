@@ -1,51 +1,71 @@
-# ============================================================
-# step3_dip_enhancement.py — DIP Enhancement pada Spektrogram
-# ============================================================
-# Jalankan setelah step2_extract_spectrograms.py
-#
-# Pipeline DIP 2 Tahap (novelty utama penelitian):
-#   Tahap 1: CLAHE  → Buriboev et al., Sensors 2024
-#            (Contrast Limited Adaptive Histogram Equalization)
-#            Meningkatkan kontras lokal secara adaptif per tile
-#   Tahap 2: Unsharp Masking → Tan et al., IJACSA 2022
-#            Mempertegas detail halus spektrogram
-#
-# Mengapa DIP pada level gambar, bukan audio?
-#   - Memungkinkan penggunaan teknik computer vision yang mapan
-#   - Meningkatkan discriminability visual antar kelas emosi
-#   - Sesuai dengan pipeline CNN-based image classification
-# ============================================================
+"""
+step3_dip_enhancement.py
+=========================
+STEP KETIGA — perkuat gambar spektrogram dengan teknik Digital Image Processing.
+
+INI ADALAH INTI DARI KONTRIBUSI PENELITIAN INI.
+
+Hipotesis: spektrogram adalah gambar grayscale. Teknik DIP yang selama ini
+dipakai di medical imaging (CT scan, MRI, X-ray) seharusnya bisa meningkatkan
+fitur yang relevan di gambar spektrogram juga — tepi frekuensi, transisi
+temporal, batas pola harmonik.
+
+Pipeline DIP yang dipakai (urutan penting!):
+  1. CLAHE  — perbaiki kontras lokal, angkat detail yang tertutup noise
+  2. Unsharp Masking — tajamkan tepi dan detail halus setelah CLAHE
+
+Kenapa CLAHE dulu, bukan Unsharp Masking dulu?
+CLAHE membuat histogram lebih merata → detail tersembunyi jadi visible.
+Unsharp Masking bekerja lebih efektif setelah detail sudah ter-enhance
+oleh CLAHE. Urutan terbalik akan menajamkan noise sebelum CLAHE sempat
+meredamnya.
+
+Input : SPEC_DIR  — gambar grayscale sebelum enhancement (dari step2)
+Output: ENHANCED_DIR — gambar grayscale setelah enhancement
+"""
 
 import os
 import sys
 import glob
 import numpy as np
 import cv2
+from tqdm import tqdm
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 
 sys.path.append('/content/drive/MyDrive/SER_Research')
-from config import *
+from config import (
+    SPEC_DIR, ENHANCED_DIR,
+    CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID,
+    UM_SIGMA, UM_STRENGTH
+)
 
 
-# ── TAHAP 1: CLAHE ───────────────────────────────────────────
+# ── CLAHE ─────────────────────────────────────────────────────────────────────
 
 def apply_clahe(img):
     """
-    CLAHE: Contrast Limited Adaptive Histogram Equalization
-    Referensi: Buriboev et al., Sensors, DOI:10.3390/s24237703, 2024
+    CLAHE = Contrast Limited Adaptive Histogram Equalization.
 
-    Cara kerja:
-    1. Bagi gambar menjadi tile-tile kecil (tileGridSize=8×8)
-    2. Terapkan histogram equalization secara independen per tile
-    3. Batasi amplifikasi dengan clipLimit=2.0 untuk cegah over-amplification
-    4. Interpolasi bilinear antar tile untuk transisi halus
+    Berbeda dari histogram equalization biasa yang bekerja pada gambar
+    keseluruhan, CLAHE membagi gambar menjadi tile-tile kecil dan
+    menyamakan histogram di setiap tile secara independen. Ini mencegah
+    area gelap yang detail-nya tidak kelihatan tetap gelap hanya karena
+    area terang mendominasi histogram global.
 
-    Parameter:
-        clipLimit (float): Batas amplifikasi kontras. Makin kecil = makin lembut.
-        tileGridSize (tuple): Ukuran grid tile. (8,8) = 8×8 = 64 tile.
+    Parameter yang dipakai (dari Buriboev et al., Sensors 2024):
+      clipLimit   = 2.0  → batas amplifikasi kontras per tile.
+                          Tanpa batas ini, area yang sudah kontras tinggi
+                          akan over-enhanced dan noise ikut diperkuat.
+                          Nilai 2.0 adalah tradeoff yang umum dipakai.
+      tileGridSize = (8,8) → gambar 128×128 dibagi 64 tile ukuran 16×16 px.
+                          Tile lebih kecil → adaptasi lebih lokal tapi
+                          lebih rentan noise. 8×8 cukup lokal untuk
+                          menangkap pola frekuensi lokal di spektrogram.
+
+    Input : img — array 2D grayscale uint8 [0, 255]
+    Output: img yang sudah di-enhance, ukuran dan tipe sama
     """
     clahe = cv2.createCLAHE(
         clipLimit=CLAHE_CLIP_LIMIT,
@@ -54,175 +74,202 @@ def apply_clahe(img):
     return clahe.apply(img)
 
 
-# ── TAHAP 2: UNSHARP MASKING ─────────────────────────────────
+# ── UNSHARP MASKING ───────────────────────────────────────────────────────────
 
-def apply_unsharp_masking(img):
+def apply_unsharp_masking(img, sigma=None, strength=None):
     """
-    Unsharp Masking untuk Image Detail Enhancement
-    Referensi: Tan et al., IJACSA Vol.13 No.8, 2022
+    Unsharp Masking — teknik penajaman gambar klasik dari dunia fotografi analog.
 
-    Cara kerja:
-    1. Buat versi blur dari gambar (low-pass filter)
-    2. Hitung mask = original - blur  (detail layer)
-    3. Tambahkan mask yang diperkuat ke gambar asli:
-       sharpened = original + strength × mask
-       = original + strength × (original - blur)
-       = (1 + strength) × original - strength × blur
+    Cara kerjanya:
+      1. Buat versi blur dari gambar asli (= "mask")
+      2. Kurangi blur dari asli → yang tersisa adalah tepi dan detail halus
+      3. Tambahkan detail itu kembali ke gambar asli dengan bobot tertentu
 
-    Implementasi menggunakan cv2.addWeighted:
-       result = alpha × original + beta × blur + gamma
-       di mana alpha = 1+strength, beta = -strength
+    Secara matematis:
+      sharpened = (1 + strength) * original - strength * blurred
+    yang sama dengan:
+      sharpened = original + strength * (original - blurred)
 
-    Parameter:
-        sigma (float): Standar deviasi Gaussian blur. Lebih besar = lebih blur.
-        strength (float): Kekuatan penajaman. 1.5 = penajaman moderat.
+    Kode OpenCV yang setara:
+      cv2.addWeighted(img, 1 + strength, blurred, -strength, 0)
+
+    Parameter (dari Tan et al., IJACSA 2022):
+      sigma    = 1.0  → radius blur kecil, hanya mempengaruhi detail
+                        sangat halus (sub-piksel). Sigma besar akan
+                        menajamkan pola berskala lebih besar tapi
+                        berisiko membuat artefak halo.
+      strength = 1.5  → penajaman moderat. Range 1.0–2.0 wajar untuk
+                        gambar spektrogram. Di bawah 1.0 hampir tidak
+                        terlihat, di atas 2.0 mulai terlihat artefak.
+
+    Input : img — array 2D grayscale uint8, sebaiknya sudah di-CLAHE
+    Output: img yang sudah ditajamkan, uint8 [0, 255]
     """
-    # Buat blur image
-    blurred = cv2.GaussianBlur(img, (0, 0), UM_SIGMA)
+    if sigma is None:
+        sigma = UM_SIGMA
+    if strength is None:
+        strength = UM_STRENGTH
 
-    # Unsharp masking: sharpened = (1+strength)*original - strength*blurred
-    sharpened = cv2.addWeighted(
-        img,      1.0 + UM_STRENGTH,   # original dengan bobot tinggi
-        blurred,  -UM_STRENGTH,         # blur dengan bobot negatif
-        0                               # gamma offset
-    )
-    return np.clip(sharpened, 0, 255).astype(np.uint8)
+    # ksize=0 artinya OpenCV hitung otomatis dari sigma: ksize = ceil(2*3*sigma+1) | 1
+    blurred = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
+
+    # addWeighted menghitung: dst = alpha * src1 + beta * src2 + gamma
+    # kita set alpha = 1+strength, beta = -strength, gamma = 0
+    sharpened = cv2.addWeighted(img, 1 + strength, blurred, -strength, 0)
+
+    return sharpened
 
 
-# ── PIPELINE DIP LENGKAP ─────────────────────────────────────
+# ── PIPELINE DIP LENGKAP ──────────────────────────────────────────────────────
 
 def apply_dip_pipeline(img):
     """
-    Pipeline DIP 2 tahap penuh: CLAHE → Unsharp Masking
-    Input : gambar grayscale uint8 [0,255]
-    Output: gambar yang telah di-enhance uint8 [0,255]
+    Jalankan pipeline DIP penuh: CLAHE → Unsharp Masking.
+
+    Fungsi ini adalah yang dipanggil untuk setiap gambar spektrogram.
+    Urutan CLAHE → UM adalah keputusan desain yang sudah dibahas
+    di docstring modul atas.
+
+    Input : img — grayscale uint8, ukuran sembarang
+    Output: img setelah CLAHE + UM, ukuran dan tipe sama
     """
-    # Tahap 1: CLAHE
-    after_clahe = apply_clahe(img)
-
-    # Tahap 2: Unsharp Masking
-    after_um = apply_unsharp_masking(after_clahe)
-
-    return after_um
+    img_clahe = apply_clahe(img)
+    img_enhanced = apply_unsharp_masking(img_clahe)
+    return img_enhanced
 
 
-def enhance_one_file(src_path, out_dir, spec_type):
+# ── PROSES SATU FILE ──────────────────────────────────────────────────────────
+
+def enhance_one_file(png_path, output_dir):
     """
-    Enhance satu file gambar spektrogram.
-    Simpan hasil ke {out_dir}/{base_name}_{spec_type}.png
+    Baca satu PNG grayscale, jalankan pipeline DIP, simpan hasilnya.
+
+    Kenapa perlu cek grayscale?
+    cv2.imread() secara default membaca sebagai BGR (3 channel).
+    Kita perlu memastikan gambar dibaca sebagai grayscale single-channel
+    sebelum dimasukkan ke CLAHE yang hanya menerima single-channel.
+
+    Mengembalikan True kalau berhasil, False kalau ada error.
     """
-    base_name = os.path.splitext(os.path.basename(src_path))[0]
-    # base_name sudah berformat: {audio_name}_{spec_type}
-    out_path = os.path.join(out_dir, f"{base_name}.png")
-
-    if os.path.exists(out_path):
-        return True
-
     try:
-        img = cv2.imread(src_path, cv2.IMREAD_GRAYSCALE)
+        basename = os.path.basename(png_path)
+        out_path = os.path.join(output_dir, basename)
+
+        # Skip kalau sudah ada
+        if os.path.exists(out_path):
+            return True
+
+        # Baca sebagai grayscale langsung
+        img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
+            print(f"\nTidak bisa membaca: {png_path}")
             return False
-        enhanced = apply_dip_pipeline(img)
-        cv2.imwrite(out_path, enhanced)
+
+        # Jalankan pipeline DIP
+        img_enhanced = apply_dip_pipeline(img)
+
+        # Simpan
+        cv2.imwrite(out_path, img_enhanced)
         return True
+
     except Exception as e:
-        print(f"\n❌ Error pada {base_name}: {e}")
+        print(f"\nError memproses {os.path.basename(png_path)}: {e}")
         return False
 
 
-# ── VISUALISASI PERBANDINGAN ──────────────────────────────────
+# ── VISUALISASI PERBANDINGAN ───────────────────────────────────────────────────
 
-def visualize_dip_comparison(wav_basename=None):
+def visualize_dip_comparison(basename_prefix, n_channels=4):
     """
-    Tampilkan perbandingan Before/After DIP untuk semua 4 channel.
+    Tampilkan perbandingan before/after CLAHE/after CLAHE+UM untuk semua channel.
+
+    basename_prefix: nama file tanpa suffix tipe dan ekstensi
+                     contoh: '03-01-05-01-02-01-12'
+
+    Layout: n_channels baris × 3 kolom
+      kolom 1: asli (dari SPEC_DIR)
+      kolom 2: setelah CLAHE saja
+      kolom 3: setelah CLAHE + Unsharp Masking (= ENHANCED_DIR)
+
+    Ini membantu verifikasi visual bahwa enhancement bekerja dengan benar.
     """
-    # Cari satu sampel
-    if wav_basename is None:
-        mel_files = glob.glob(f"{SPEC_DIR}/*_mel.png")
-        if not mel_files:
-            print("❌ Tidak ada file spektrogram untuk divisualisasi.")
-            return
-        wav_basename = os.path.basename(mel_files[0]).replace('_mel.png', '')
+    channel_types = ['mel', 'mfcc', 'cqt', 'chroma']
+    fig, axes = plt.subplots(n_channels, 3, figsize=(12, 4 * n_channels))
+    fig.suptitle(f"DIP Comparison: {basename_prefix}", fontsize=13)
 
-    print(f"📊 Visualisasi DIP comparison: {wav_basename}")
+    col_labels = ['Asli', 'Setelah CLAHE', 'Setelah CLAHE + UM']
+    for ax, label in zip(axes[0], col_labels):
+        ax.set_title(label, fontsize=11, fontweight='bold')
 
-    fig, axes = plt.subplots(4, 3, figsize=(15, 20))
-    fig.suptitle('DIP Enhancement: Before → After CLAHE → After CLAHE+UM',
-                 fontsize=13, fontweight='bold')
-
-    for row_idx, spec_type in enumerate(CHANNEL_ORDER):
-        orig_path = os.path.join(SPEC_DIR, f"{wav_basename}_{spec_type}.png")
-        enh_path  = os.path.join(ENHANCED_DIR, f"{wav_basename}_{spec_type}.png")
+    for row, ch_type in enumerate(channel_types[:n_channels]):
+        fname = f"{basename_prefix}_{ch_type}.png"
+        orig_path = os.path.join(SPEC_DIR, fname)
 
         orig = cv2.imread(orig_path, cv2.IMREAD_GRAYSCALE)
         if orig is None:
+            for col in range(3):
+                axes[row, col].text(0.5, 0.5, f"File tidak ada:\n{fname}",
+                                    ha='center', va='center', transform=axes[row, col].transAxes)
             continue
 
         after_clahe = apply_clahe(orig)
-        after_um    = apply_unsharp_masking(after_clahe)
+        after_both = apply_unsharp_masking(after_clahe)
 
-        for col_idx, (title, img) in enumerate([
-            (f"{spec_type.upper()}\nOriginal", orig),
-            (f"{spec_type.upper()}\nAfter CLAHE", after_clahe),
-            (f"{spec_type.upper()}\nAfter CLAHE+UM", after_um),
-        ]):
-            axes[row_idx, col_idx].imshow(img, cmap='viridis',
-                                           aspect='auto', origin='lower')
-            axes[row_idx, col_idx].set_title(title, fontsize=10)
-            axes[row_idx, col_idx].axis('off')
+        for col, (img, title) in enumerate(zip(
+            [orig, after_clahe, after_both],
+            col_labels
+        )):
+            axes[row, col].imshow(img, cmap='magma', aspect='auto')
+            axes[row, col].set_ylabel(ch_type.upper(), fontsize=9)
+            axes[row, col].set_xticks([])
+            axes[row, col].set_yticks([])
 
     plt.tight_layout()
-    save_path = os.path.join(RESULT_DIR, "dip_comparison.png")
-    plt.savefig(save_path, dpi=100, bbox_inches='tight')
     plt.show()
-    print(f"✅ Gambar perbandingan disimpan ke {save_path}")
 
 
-# ── MAIN ─────────────────────────────────────────────────────
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("🚀 STEP 3: DIP Enhancement pada Spektrogram")
-    print("="*50)
-    print(f"  Metode 1 : CLAHE (clipLimit={CLAHE_CLIP_LIMIT}, "
-          f"tileGrid={CLAHE_TILE_GRID})")
-    print(f"  Metode 2 : Unsharp Masking (sigma={UM_SIGMA}, "
-          f"strength={UM_STRENGTH})")
-    print("="*50)
+    print("STEP 3: DIP Enhancement (CLAHE + Unsharp Masking)")
+    print("=" * 50)
+    print(f"  CLAHE  : clipLimit={CLAHE_CLIP_LIMIT}, tileGrid={CLAHE_TILE_GRID}")
+    print(f"  Unsharp: sigma={UM_SIGMA}, strength={UM_STRENGTH}")
+    print()
 
     os.makedirs(ENHANCED_DIR, exist_ok=True)
-    os.makedirs(RESULT_DIR, exist_ok=True)
 
-    # Kumpulkan semua gambar spektrogram
-    spec_files = glob.glob(f"{SPEC_DIR}/*.png")
-    if len(spec_files) == 0:
-        print("❌ Tidak ada gambar spektrogram! Jalankan step2 dulu.")
+    # Temukan semua PNG di SPEC_DIR
+    png_files = sorted(glob.glob(f"{SPEC_DIR}/*.png"))
+    if not png_files:
+        print("Tidak ada PNG di SPEC_DIR. Jalankan step2 dulu.")
         sys.exit(1)
 
-    print(f"🖼️  Total gambar spektrogram: {len(spec_files)}")
-    print(f"📁 Output ke: {ENHANCED_DIR}")
+    print(f"Ditemukan {len(png_files)} gambar untuk di-enhance")
 
+    # Visualisasi perbandingan untuk satu sampel
+    sample_file = png_files[0]
+    sample_prefix = '_'.join(os.path.basename(sample_file).split('_')[:-1])
+    print(f"\nVisualisasi DIP untuk sampel: {sample_prefix}")
+    visualize_dip_comparison(sample_prefix)
+
+    # Proses semua file
     success = 0
     fail = 0
-    for spec_path in tqdm(spec_files, desc="DIP Enhancement"):
-        spec_type = None
-        for t in CHANNEL_ORDER:
-            if spec_path.endswith(f"_{t}.png"):
-                spec_type = t
-                break
-        ok = enhance_one_file(spec_path, ENHANCED_DIR, spec_type)
+    for png_path in tqdm(png_files, desc="DIP Enhancement", unit="file"):
+        ok = enhance_one_file(png_path, ENHANCED_DIR)
         if ok:
             success += 1
         else:
             fail += 1
 
-    total_enhanced = len(glob.glob(f"{ENHANCED_DIR}/*.png"))
-    print(f"\n{'='*50}")
-    print(f"✅ Berhasil     : {success} gambar")
-    print(f"❌ Gagal        : {fail} gambar")
-    print(f"🖼️  Total tersimpan: {total_enhanced}")
+    print(f"\nSelesai: {success} berhasil, {fail} gagal")
 
-    # Visualisasi perbandingan
-    print("\n📊 Membuat visualisasi perbandingan DIP...")
-    visualize_dip_comparison()
+    # Verifikasi
+    out_count = len(glob.glob(f"{ENHANCED_DIR}/*.png"))
+    print(f"File di ENHANCED_DIR: {out_count} (expected: {len(png_files)})")
 
-    print("\n✅ Step 3 selesai! Lanjut ke step4_build_dataset.py")
+    if out_count >= len(png_files) * 0.99:
+        print("Step 3 selesai. Lanjut ke step4_build_dataset.py")
+    else:
+        print("Ada file yang hilang — periksa error di atas.")

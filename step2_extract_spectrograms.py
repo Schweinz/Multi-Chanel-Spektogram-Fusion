@@ -1,14 +1,24 @@
-# ============================================================
-# step2_extract_spectrograms.py — Ekstraksi 4 Spektrogram
-# ============================================================
-# Jalankan setelah step1_prepare_data.py
-# Script ini menghasilkan 4 jenis gambar spektrogram per file:
-#   1. Mel Spectrogram   → representasi energi frekuensi mel
-#   2. MFCC              → ciri vokal/timbral
-#   3. CQT               → ciri harmonik/nada
-#   4. Chroma STFT       → ciri tonal/nada
-# Setiap gambar disimpan sebagai .png 128×128 grayscale
-# ============================================================
+"""
+step2_extract_spectrograms.py
+==============================
+STEP KEDUA — ubah file audio .wav jadi gambar spektrogram.
+
+Setiap file .wav menghasilkan 4 gambar 128×128 piksel:
+  • Mel Spectrogram  → representasi energi per frekuensi-mel vs waktu
+  • MFCC             → koefisien cepstral, ringkasan kompak suara vokal
+  • CQT              → Constant-Q Transform, log-frekuensi, mirip skala nada musik
+  • Chroma           → distribusi energi per kelas nada (12 nada oktav)
+
+Kenapa 4 jenis?
+Masing-masing menangkap aspek berbeda dari sinyal bicara.
+Mel bagus untuk tekstur vokal, MFCC untuk identitas pembicara,
+CQT untuk kontur nada, Chroma untuk harmoni. Digabung jadi 4 channel
+nanti di step4, semoga saling melengkapi.
+
+Output folder: SPEC_DIR (dari config.py)
+Nama file    : {basename}_{jenis}.png
+              contoh: 03-01-05-01-02-01-12_mel.png
+"""
 
 import os
 import sys
@@ -17,231 +27,276 @@ import numpy as np
 import librosa
 import librosa.display
 import cv2
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend untuk server
-import matplotlib.pyplot as plt
 from tqdm import tqdm
+import matplotlib
+matplotlib.use('Agg')   # non-interactive backend — tidak perlu tampilan grafis
+import matplotlib.pyplot as plt
 
 sys.path.append('/content/drive/MyDrive/SER_Research')
-from config import *
+from config import (
+    RAW_DATA_DIR, SPEC_DIR,
+    SAMPLE_RATE, IMG_SIZE,
+    N_MELS, N_FFT, HOP_LENGTH,
+    N_MFCC, N_BINS, BINS_PER_OCTAVE, N_CHROMA
+)
 
-# ── FUNGSI EKSTRAKSI SPEKTROGRAM ────────────────────────────
 
-def load_audio(filepath):
-    """Load file audio dengan sample rate yang sudah ditentukan."""
+# ── LOAD AUDIO ────────────────────────────────────────────────────────────────
+
+def load_audio(filepath, target_duration=3.0):
+    """
+    Baca file .wav dan normalkan panjangnya ke target_duration detik.
+
+    Kenapa di-pad/potong ke 3 detik?
+    RAVDESS punya durasi bervariasi (rata-rata 3-4 detik). Model butuh
+    input ukuran tetap. 3 detik = 66150 sampel di 22050 Hz, cukup
+    menangkap satu ungkapan emosi penuh tanpa terlalu banyak padding.
+
+    Padding pakai `reflect` bukan nol (zero-pad) supaya spektrogram
+    tidak punya "dinding" diam di tepi yang bisa jadi artefak.
+    """
+    target_samples = int(SAMPLE_RATE * target_duration)
+
     y, sr = librosa.load(filepath, sr=SAMPLE_RATE)
-    # Padding/truncating ke panjang 3 detik agar konsisten
-    target_len = SAMPLE_RATE * 3
-    if len(y) < target_len:
-        y = np.pad(y, (0, target_len - len(y)))
-    else:
-        y = y[:target_len]
+
+    if len(y) < target_samples:
+        # Audio terlalu pendek: pad dengan mode reflect
+        y = np.pad(y, (0, target_samples - len(y)), mode='reflect')
+    elif len(y) > target_samples:
+        # Audio terlalu panjang: ambil dari tengah supaya tidak kehilangan
+        # bagian penting di awal/akhir ucapan
+        start = (len(y) - target_samples) // 2
+        y = y[start: start + target_samples]
+
     return y, sr
 
 
+# ── EKSTRAKSI SPEKTROGRAM ─────────────────────────────────────────────────────
+
 def extract_mel(y, sr):
     """
-    Mel Spectrogram — representasi energi dalam skala mel.
-    Baik untuk menangkap karakteristik energi emosi secara umum.
+    Mel Spectrogram dalam skala decibel.
+
+    librosa.feature.melspectrogram() menghasilkan power spectrogram
+    lalu memetakannya ke mel filterbank. Kita konversi ke dB supaya
+    rentang nilai lebih manageable (log-compression).
+
+    n_mels=128 → 128 baris di spektrogram
+    n_fft=2048 → FFT window ~93ms
+    hop_length=512 → melangkah ~23ms per kolom
     """
-    mel = librosa.feature.melspectrogram(
+    S = librosa.feature.melspectrogram(
         y=y, sr=sr,
-        n_mels=N_MELS,
-        n_fft=N_FFT,
-        hop_length=HOP_LENGTH
+        n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP_LENGTH
     )
-    mel_db = librosa.power_to_db(mel, ref=np.max)
-    return mel_db
+    S_db = librosa.power_to_db(S, ref=np.max)
+    return S_db
 
 
 def extract_mfcc(y, sr):
     """
-    MFCC — Mel Frequency Cepstral Coefficients.
-    Merepresentasikan ciri vokal dan timbral dari suara emosi.
+    Mel-Frequency Cepstral Coefficients (MFCC).
+
+    MFCC adalah 'ringkasan' dari spektrum mel. Diambil 40 koefisien
+    pertama — koefisien rendah merepresentasikan timbre vokal secara
+    kasar, koefisien tinggi merepresentasikan detail halus yang jarang
+    relevan.
+
+    Dipakai luas di speech recognition sejak 1980-an. Di sini kita
+    representasikan sebagai gambar 2D (koefisien vs waktu).
     """
     mfcc = librosa.feature.mfcc(
         y=y, sr=sr,
-        n_mfcc=N_MFCC,
-        n_fft=N_FFT,
-        hop_length=HOP_LENGTH
+        n_mfcc=N_MFCC, n_fft=N_FFT, hop_length=HOP_LENGTH
     )
     return mfcc
 
 
 def extract_cqt(y, sr):
     """
-    Constant-Q Transform (CQT) — representasi harmonik/nada.
-    Resolusi frekuensi logaritmik, cocok untuk variasi pitch emosi.
+    Constant-Q Transform (CQT) dalam skala decibel.
+
+    Berbeda dari FFT yang punya resolusi frekuensi seragam, CQT punya
+    resolusi yang proporsional terhadap frekuensi (seperti piano).
+    Ini cocok untuk sinyal bicara yang kontur nadanya penting.
+
+    n_bins=84, bins_per_octave=12 → 7 oktav dengan 12 nada per oktav,
+    persis seperti skala musik standar.
     """
-    cqt = librosa.cqt(
+    C = np.abs(librosa.cqt(
         y=y, sr=sr,
-        n_bins=N_BINS,
-        bins_per_octave=BINS_PER_OCTAVE,
+        n_bins=N_BINS, bins_per_octave=BINS_PER_OCTAVE,
         hop_length=HOP_LENGTH
-    )
-    cqt_db = librosa.amplitude_to_db(np.abs(cqt), ref=np.max)
-    return cqt_db
+    ))
+    C_db = librosa.amplitude_to_db(C, ref=np.max)
+    return C_db
 
 
 def extract_chroma(y, sr):
     """
-    Chroma STFT — representasi distribusi energi per pitch class.
-    Menangkap informasi tonal (major/minor) yang berkaitan dengan emosi.
+    Chroma Energy Normalized Statistics (CHROMA_STFT).
+
+    Merangkum distribusi energi per kelas nada (C, C#, D, ..., B).
+    12 baris = 12 kelas nada dalam satu oktav.
+
+    Berguna untuk mendeteksi pola harmonis dalam ucapan emosional.
+    Emosi "happy" cenderung punya kontur nada naik, "sad" turun —
+    chroma menangkap pola ini dengan cara berbeda dari mel.
     """
     chroma = librosa.feature.chroma_stft(
         y=y, sr=sr,
-        n_chroma=N_CHROMA,
-        n_fft=N_FFT,
-        hop_length=HOP_LENGTH
+        n_fft=N_FFT, hop_length=HOP_LENGTH
     )
     return chroma
 
 
-def spectrogram_to_image(spec_data, img_size=IMG_SIZE):
+# ── KONVERSI KE GAMBAR ────────────────────────────────────────────────────────
+
+def spectrogram_to_image(spec_data):
     """
-    Konversi array numpy spektrogram ke gambar grayscale 128×128.
+    Ubah array 2D spektrogram jadi gambar grayscale 128×128 piksel.
+
     Langkah:
-    1. Normalisasi ke rentang [0, 255]
-    2. Resize ke IMG_SIZE menggunakan INTER_AREA (anti-aliasing)
-    3. Konversi ke uint8
+    1. Normalisasi ke [0, 255] — nilai terendah → hitam, tertinggi → putih
+    2. Resize ke IMG_SIZE dengan interpolasi area (INTER_AREA),
+       bagus untuk downscaling karena tidak aliasing
+    3. Simpan sebagai uint8 (8-bit grayscale)
+
+    Kenapa grayscale, bukan colormap (seperti viridis)?
+    Karena kita akan stack 4 channel menjadi tensor 4-channel sendiri.
+    Colormap hanya akan mengacaukan karena menambah dimensi warna
+    yang tidak kita butuhkan.
     """
-    # Normalisasi ke [0, 1]
+    # Normalisasi ke [0, 255]
     spec_min = spec_data.min()
     spec_max = spec_data.max()
     if spec_max - spec_min > 1e-8:
-        normalized = (spec_data - spec_min) / (spec_max - spec_min)
+        normalized = (spec_data - spec_min) / (spec_max - spec_min) * 255
     else:
         normalized = np.zeros_like(spec_data)
 
-    # Ke [0, 255] uint8
-    img = (normalized * 255).astype(np.uint8)
+    img = normalized.astype(np.uint8)
 
-    # Resize ke target size
-    img_resized = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
+    # Resize ke 128×128
+    img_resized = cv2.resize(img, IMG_SIZE, interpolation=cv2.INTER_AREA)
     return img_resized
 
 
-def process_one_file(wav_path, out_dir):
-    """
-    Proses satu file .wav → simpan 4 gambar spektrogram.
-    Nama file output: {base_name}_{type}.png
-    """
-    base_name = os.path.splitext(os.path.basename(wav_path))[0]
+# ── PROSES SATU FILE ──────────────────────────────────────────────────────────
 
-    # Skip jika semua 4 file sudah ada
-    all_exist = all(
-        os.path.exists(os.path.join(out_dir, f"{base_name}_{t}.png"))
-        for t in CHANNEL_ORDER
-    )
-    if all_exist:
-        return True
+def process_one_file(wav_path, output_dir):
+    """
+    Proses satu file .wav: load audio → 4 spektrogram → 4 gambar PNG.
 
+    Mengembalikan True kalau berhasil, False kalau ada error.
+    Error dilog tapi tidak menghentikan loop — supaya satu file
+    yang korup tidak menggagalkan seluruh dataset.
+    """
     try:
+        basename = os.path.splitext(os.path.basename(wav_path))[0]
+
+        # Cek apakah sudah diproses sebelumnya (resume friendly)
+        expected = [f"{basename}_{t}.png" for t in ['mel', 'mfcc', 'cqt', 'chroma']]
+        if all(os.path.exists(os.path.join(output_dir, f)) for f in expected):
+            return True  # sudah ada, lewati
+
+        # Load audio
         y, sr = load_audio(wav_path)
 
-        extractors = {
+        # Ekstrak 4 representasi
+        specs = {
             'mel':    extract_mel(y, sr),
             'mfcc':   extract_mfcc(y, sr),
             'cqt':    extract_cqt(y, sr),
             'chroma': extract_chroma(y, sr),
         }
 
-        for spec_type, spec_data in extractors.items():
+        # Simpan masing-masing sebagai PNG grayscale
+        for spec_type, spec_data in specs.items():
             img = spectrogram_to_image(spec_data)
-            out_path = os.path.join(out_dir, f"{base_name}_{spec_type}.png")
+            out_path = os.path.join(output_dir, f"{basename}_{spec_type}.png")
             cv2.imwrite(out_path, img)
 
         return True
+
     except Exception as e:
-        print(f"\n❌ Error pada {base_name}: {e}")
+        print(f"\nError memproses {os.path.basename(wav_path)}: {e}")
         return False
 
 
-# ── VISUALISASI SAMPEL ───────────────────────────────────────
+# ── VISUALISASI SAMPEL ────────────────────────────────────────────────────────
 
-def visualize_sample(wav_path=None):
+def visualize_sample(wav_path):
     """
-    Tampilkan 4 spektrogram dari satu file sample untuk verifikasi.
-    """
-    if wav_path is None:
-        wav_files = glob.glob(f"{RAW_DATA_DIR}/**/*.wav", recursive=True)
-        if not wav_files:
-            wav_files = glob.glob(f"{RAW_DATA_DIR}/*.wav")
-        if not wav_files:
-            print("❌ Tidak ada file .wav untuk divisualisasi.")
-            return
-        wav_path = wav_files[0]
+    Tampilkan 4 spektrogram dari satu file .wav berdampingan.
 
-    print(f"📊 Visualisasi spektrogram dari: {os.path.basename(wav_path)}")
+    Berguna untuk cek visual sebelum melanjutkan ke step3.
+    Pastikan gambar terlihat wajar — tidak semua hitam atau semua putih.
+    """
     y, sr = load_audio(wav_path)
-
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle('4-Channel Spectrogram Visualization', fontsize=14, fontweight='bold')
-
     specs = {
-        'Mel Spectrogram':  extract_mel(y, sr),
-        'MFCC':             extract_mfcc(y, sr),
-        'CQT':              extract_cqt(y, sr),
-        'Chroma STFT':      extract_chroma(y, sr),
+        'Mel Spectrogram': extract_mel(y, sr),
+        'MFCC':            extract_mfcc(y, sr),
+        'CQT':             extract_cqt(y, sr),
+        'Chroma':          extract_chroma(y, sr),
     }
 
-    for ax, (title, spec) in zip(axes.flat, specs.items()):
-        img = spectrogram_to_image(spec)
-        ax.imshow(img, cmap='viridis', aspect='auto', origin='lower')
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    fig.suptitle(f"Spektrogram: {os.path.basename(wav_path)}", fontsize=12)
+
+    for ax, (title, S) in zip(axes, specs.items()):
+        im = ax.imshow(S, aspect='auto', origin='lower', cmap='magma')
         ax.set_title(title)
-        ax.set_xlabel('Time Frames')
-        ax.set_ylabel('Frequency Bins')
-        plt.colorbar(ax.images[0], ax=ax)
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('Bin')
+        plt.colorbar(im, ax=ax, format='%+2.0f dB')
 
     plt.tight_layout()
-    save_path = os.path.join(RESULT_DIR, "sample_spectrograms.png")
-    plt.savefig(save_path, dpi=100, bbox_inches='tight')
     plt.show()
-    print(f"✅ Gambar disimpan ke {save_path}")
 
 
-# ── MAIN ─────────────────────────────────────────────────────
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("🚀 STEP 2: Ekstraksi Spektrogram")
-    print("="*50)
+    print("STEP 2: Ekstraksi Spektrogram")
+    print("=" * 45)
 
-    # Buat output dir
     os.makedirs(SPEC_DIR, exist_ok=True)
-    os.makedirs(RESULT_DIR, exist_ok=True)
 
-    # Kumpulkan semua file wav
-    wav_files = glob.glob(f"{RAW_DATA_DIR}/**/*.wav", recursive=True)
+    # Temukan semua file .wav
+    wav_files = sorted(glob.glob(f"{RAW_DATA_DIR}/**/*.wav", recursive=True))
     if not wav_files:
-        wav_files = glob.glob(f"{RAW_DATA_DIR}/*.wav")
+        wav_files = sorted(glob.glob(f"{RAW_DATA_DIR}/*.wav"))
 
-    if len(wav_files) == 0:
-        print("❌ Tidak ada file .wav! Jalankan step1 dulu.")
+    if not wav_files:
+        print("Tidak ada file .wav ditemukan. Jalankan step1 dulu.")
         sys.exit(1)
 
-    print(f"📂 Total file .wav: {len(wav_files)}")
-    print(f"📁 Output ke: {SPEC_DIR}")
-    print(f"🔄 Mengekstrak 4 spektrogram per file...")
+    print(f"Ditemukan {len(wav_files)} file .wav")
+    print(f"Output ke: {SPEC_DIR}")
+
+    # Visualisasi sampel pertama sebagai sanity check
+    print("\nVisualisasi sampel pertama:")
+    visualize_sample(wav_files[0])
 
     # Proses semua file
     success = 0
     fail = 0
-    for wav_path in tqdm(wav_files, desc="Ekstraksi"):
+    for wav_path in tqdm(wav_files, desc="Ekstraksi", unit="file"):
         ok = process_one_file(wav_path, SPEC_DIR)
         if ok:
             success += 1
         else:
             fail += 1
 
-    total_imgs = len(glob.glob(f"{SPEC_DIR}/*.png"))
-    print(f"\n{'='*50}")
-    print(f"✅ Berhasil : {success} file")
-    print(f"❌ Gagal    : {fail} file")
-    print(f"🖼️  Total gambar tersimpan: {total_imgs}")
-    print(f"   (Expected: {len(wav_files) * 4} = {len(wav_files)} file × 4 jenis)")
+    print(f"\nSelesai: {success} berhasil, {fail} gagal")
 
-    # Visualisasi 1 sampel
-    print("\n📊 Membuat visualisasi sampel...")
-    visualize_sample()
+    # Verifikasi jumlah output
+    png_count = len(glob.glob(f"{SPEC_DIR}/*.png"))
+    expected_count = len(wav_files) * 4  # 4 jenis per file
+    print(f"PNG yang dihasilkan: {png_count} (expected: {expected_count})")
 
-    print("\n✅ Step 2 selesai! Lanjut ke step3_dip_enhancement.py")
+    if png_count >= expected_count * 0.99:  # toleransi 1%
+        print("Step 2 selesai. Lanjut ke step3_dip_enhancement.py")
+    else:
+        print("Ada file yang hilang — periksa error di atas.")

@@ -1,297 +1,283 @@
-# ============================================================
-# step4_build_dataset.py — Fusi 4-Channel & Pembuatan Dataset
-# ============================================================
-# Jalankan setelah step3_dip_enhancement.py
-#
-# Script ini akan:
-#   1. Gabungkan 4 gambar spektrogram (Mel+MFCC+CQT+Chroma)
-#      menjadi satu tensor 128×128×4 per sampel
-#   2. Ekstrak label dari nama file RAVDESS
-#   3. Split dataset: 70% train / 15% val / 15% test
-#      (stratified per kelas emosi)
-#   4. Simpan sebagai file .npz di FUSED_DIR
-#   5. Visualisasi distribusi kelas
-# ============================================================
+"""
+step4_build_dataset.py
+=======================
+STEP KEEMPAT — gabungkan 4 gambar spektrogram jadi satu tensor,
+parse label emosi, dan bagi dataset jadi train/val/test.
+
+Setiap sampel RAVDESS menghasilkan 4 gambar grayscale (mel, mfcc, cqt, chroma)
+di ENHANCED_DIR. Step ini menggabungkan keempat gambar tersebut menjadi
+satu array 128×128×4. Bayangkan seperti gambar RGB (3 channel warna),
+tapi kita punya 4 channel — masing-masing berisi representasi spektrum yang
+berbeda dari audio yang sama.
+
+Kenapa digabung jadi tensor, bukan 4 gambar terpisah?
+Supaya model bisa belajar hubungan antar channel secara bersamaan.
+Kalau diberikan satu per satu, model tidak pernah "lihat" keempatnya
+sekaligus dan tidak bisa belajar pola yang muncul saat mel + mfcc
+bergerak bersamaan.
+
+Output: FUSED_DIR/dataset.npz
+  X_train, X_val, X_test  → float32, shape (N, 128, 128, 4), range [0, 1]
+  y_train, y_val, y_test  → int, label kelas [0, 7]
+"""
 
 import os
 import sys
 import glob
 import numpy as np
 import cv2
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
+from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from collections import Counter
+from tqdm import tqdm
 
 sys.path.append('/content/drive/MyDrive/SER_Research')
-from config import *
+from config import (
+    ENHANCED_DIR, SPEC_DIR, FUSED_DIR,
+    EMOTION_MAP, EMOTION_LABELS, N_CLASSES,
+    IMG_SIZE, CHANNEL_ORDER,
+    RANDOM_SEED, TEST_SIZE, VAL_SIZE
+)
 
 
-# ── EKSTRAKSI LABEL DARI NAMA FILE ───────────────────────────
+# ── PARSING LABEL ─────────────────────────────────────────────────────────────
 
 def parse_ravdess_label(filename):
     """
-    Parse label emosi dari nama file RAVDESS.
-    Format: 03-01-[emotion]-[intensity]-[statement]-[repetition]-[actor].wav
-    Index 2 (kolom ke-3) = kode emosi ('01'–'08')
+    Ekstrak kode emosi dari nama file RAVDESS dan kembalikan indeks kelas.
 
-    Contoh: 03-01-05-01-01-01-01 → '05' → 'angry'
+    Format nama file RAVDESS:
+      03-01-[EMOSI]-01-01-01-01_mel.png
+              ↑ ini yang kita ambil, posisi index 2 setelah split '-'
+
+    Kode emosi:
+      '01' → neutral  → index 0
+      '02' → calm     → index 1
+      '03' → happy    → index 2
+      '04' → sad      → index 3
+      '05' → angry    → index 4
+      '06' → fearful  → index 5
+      '07' → disgust  → index 6
+      '08' → surprised→ index 7
+
+    Mengembalikan integer [0, 7] atau None kalau format tidak dikenali.
     """
-    base = os.path.splitext(os.path.basename(filename))[0]
-    # Hapus suffix channel jika ada (_mel, _mfcc, _cqt, _chroma)
-    for suffix in ['_mel', '_mfcc', '_cqt', '_chroma']:
-        if base.endswith(suffix):
-            base = base[:-len(suffix)]
-            break
-    parts = base.split('-')
+    # Hapus suffix channel (_mel, _mfcc, dst) dan ekstensi
+    base = os.path.basename(filename)
+    # nama file mungkin: 03-01-05-01-02-01-12_mel.png
+    # kita buang bagian setelah '_' terakhir
+    name_no_ext = os.path.splitext(base)[0]   # hapus .png
+    ravdess_part = name_no_ext.rsplit('_', 1)[0]  # hapus suffix _mel / _mfcc / dll
+
+    parts = ravdess_part.split('-')
     if len(parts) < 3:
         return None
-    emo_code = parts[2]
-    return EMOTION_MAP.get(emo_code, None)
+
+    emotion_code = parts[2]  # index 2 = kode emosi
+    emotion_name = EMOTION_MAP.get(emotion_code)
+    if emotion_name is None:
+        return None
+
+    return EMOTION_LABELS.index(emotion_name)
 
 
-def label_to_idx(label):
-    """Konversi nama emosi ke indeks integer (0-7)."""
-    return EMOTION_LABELS.index(label)
+# ── FUSION 4 CHANNEL ──────────────────────────────────────────────────────────
 
-
-# ── FUSI 4-CHANNEL ───────────────────────────────────────────
-
-def fuse_channels(base_name, enhanced_dir):
+def fuse_channels(file_dict):
     """
-    Gabungkan 4 gambar grayscale (mel, mfcc, cqt, chroma)
-    menjadi satu array numpy 128×128×4.
+    Gabungkan 4 gambar grayscale menjadi satu tensor float32 128×128×4.
 
-    Input : base_name (tanpa ekstensi channel, misal '03-01-05-01-01-01-01')
-    Output: array float32 [0,1] berukuran (128, 128, 4)
-            atau None jika ada channel yang hilang
+    file_dict: dict {channel_type: path_to_png}
+               contoh: {'mel': '...mel.png', 'mfcc': '...mfcc.png', ...}
+
+    Urutan channel mengikuti CHANNEL_ORDER dari config.py:
+      index 0 = mel
+      index 1 = mfcc
+      index 2 = cqt
+      index 3 = chroma
+
+    Kenapa dibagi 255?
+    MobileNetV2 pretrained ImageNet mengharapkan input dalam range [0, 1]
+    (setelah normalisasi dengan preprocess_input, tapi kita skip itu
+    dan langsung normalize ke [0, 1] supaya konsisten di semua channel).
     """
     channels = []
     for ch_type in CHANNEL_ORDER:
-        img_path = os.path.join(enhanced_dir, f"{base_name}_{ch_type}.png")
-        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            return None
-        # Resize ulang untuk memastikan konsistensi
-        img = cv2.resize(img, IMG_SIZE, interpolation=cv2.INTER_AREA)
-        channels.append(img)
+        path = file_dict.get(ch_type)
+        if path is None or not os.path.exists(path):
+            # Channel hilang: isi dengan nol (akan ada warning tapi tidak crash)
+            channels.append(np.zeros(IMG_SIZE, dtype=np.float32))
+            continue
 
-    # Stack → (128, 128, 4), normalisasi ke [0,1]
-    tensor = np.stack(channels, axis=-1).astype(np.float32) / 255.0
+        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            channels.append(np.zeros(IMG_SIZE, dtype=np.float32))
+            continue
+
+        # Pastikan ukuran tepat (seharusnya sudah 128×128 dari step2)
+        if img.shape[:2] != IMG_SIZE:
+            img = cv2.resize(img, IMG_SIZE, interpolation=cv2.INTER_AREA)
+
+        channels.append(img.astype(np.float32) / 255.0)
+
+    # Stack: list of (128, 128) → (128, 128, 4)
+    tensor = np.stack(channels, axis=-1)
     return tensor
 
 
-# ── BANGUN SELURUH DATASET ────────────────────────────────────
+# ── BANGUN DATASET PENUH ──────────────────────────────────────────────────────
 
-def build_full_dataset(enhanced_dir=ENHANCED_DIR):
+def build_full_dataset(enhanced_dir=None):
     """
-    Iterasi semua sampel di enhanced_dir, fusi per sampel,
-    return X (N, 128, 128, 4) dan y (N,) integer.
+    Scan semua PNG di enhanced_dir, kelompokkan per sampel,
+    fusion 4 channel, kembalikan X dan y.
+
+    enhanced_dir: folder yang berisi PNG. Default ke ENHANCED_DIR.
+                  Bisa di-override ke SPEC_DIR untuk kondisi B1/B3
+                  (tanpa DIP enhancement).
+
+    Cara kerja pengelompokan:
+    Setiap sampel RAVDESS menghasilkan 4 file:
+      {basename}_mel.png, {basename}_mfcc.png, dll.
+    Kita kelompokkan berdasarkan {basename} (tanpa suffix channel),
+    lalu untuk setiap kelompok yang punya semua 4 channel, kita fuse.
+
+    Return: X (N, 128, 128, 4) float32, y (N,) int
     """
-    # Temukan semua base_name unik dari file _mel.png
-    mel_files = sorted(glob.glob(os.path.join(enhanced_dir, "*_mel.png")))
-    if len(mel_files) == 0:
+    if enhanced_dir is None:
+        enhanced_dir = ENHANCED_DIR
+
+    all_png = glob.glob(f"{enhanced_dir}/*.png")
+    if not all_png:
         raise FileNotFoundError(
-            f"Tidak ada file *_mel.png di {enhanced_dir}. "
-            "Pastikan step3 sudah selesai."
+            f"Tidak ada PNG di {enhanced_dir}. "
+            "Pastikan step2 dan step3 sudah dijalankan."
         )
 
-    print(f"📂 Total sampel ditemukan: {len(mel_files)}")
+    # Kelompokkan file per sampel RAVDESS
+    sample_files = defaultdict(dict)
+    for png_path in all_png:
+        name_no_ext = os.path.splitext(os.path.basename(png_path))[0]
+        # Pisahkan: '03-01-05-01-02-01-12_mel' → basename='03-01-05-01-02-01-12', ch='mel'
+        parts = name_no_ext.rsplit('_', 1)
+        if len(parts) != 2:
+            continue
+        basename, ch_type = parts
+        if ch_type in CHANNEL_ORDER:
+            sample_files[basename][ch_type] = png_path
 
-    X_list, y_list, skipped = [], [], []
-    for mel_path in mel_files:
-        base_name = os.path.basename(mel_path).replace('_mel.png', '')
-        label = parse_ravdess_label(base_name)
+    # Buat tensor dan label untuk setiap sampel yang lengkap (semua 4 channel ada)
+    X_list = []
+    y_list = []
+    skipped = 0
+
+    for basename, file_dict in tqdm(sample_files.items(), desc="Fusing channels", unit="sampel"):
+        # Cek semua 4 channel ada
+        if not all(ch in file_dict for ch in CHANNEL_ORDER):
+            skipped += 1
+            continue
+
+        # Parse label dari nama file
+        label = parse_ravdess_label(f"{basename}_mel.png")
         if label is None:
-            skipped.append(base_name)
+            skipped += 1
             continue
 
-        tensor = fuse_channels(base_name, enhanced_dir)
-        if tensor is None:
-            skipped.append(base_name)
-            continue
-
+        tensor = fuse_channels(file_dict)
         X_list.append(tensor)
-        y_list.append(label_to_idx(label))
+        y_list.append(label)
 
-    X = np.array(X_list, dtype=np.float32)
-    y = np.array(y_list, dtype=np.int32)
+    if skipped > 0:
+        print(f"Catatan: {skipped} sampel dilewati (channel tidak lengkap atau label tidak dikenali)")
 
-    print(f"✅ Berhasil diproses : {len(X)} sampel")
-    if skipped:
-        print(f"⚠️  Dilewati         : {len(skipped)} sampel")
-    print(f"📐 Shape X           : {X.shape}")  # (N, 128, 128, 4)
-    print(f"📐 Shape y           : {y.shape}")  # (N,)
+    X = np.array(X_list, dtype=np.float32)   # (N, 128, 128, 4)
+    y = np.array(y_list, dtype=np.int32)      # (N,)
+    print(f"Dataset: {len(X)} sampel, shape={X.shape}, label unik={np.unique(y)}")
     return X, y
 
 
-# ── SPLIT DATASET ─────────────────────────────────────────────
+# ── SPLIT DATASET ─────────────────────────────────────────────────────────────
 
 def split_dataset(X, y):
     """
-    Stratified split: 70% train / 15% val / 15% test
-    Menggunakan RANDOM_SEED untuk reproducibility.
+    Bagi X dan y menjadi train / val / test dengan stratified sampling.
 
-    Stratified = menjaga distribusi kelas yang seimbang
-    di setiap split, penting untuk dataset yang tidak rata.
+    Stratified artinya proporsi kelas dipertahankan di setiap split.
+    Penting untuk dataset yang tidak seimbang — walaupun RAVDESS
+    relatif seimbang, stratified tetap lebih aman.
+
+    Rasio: 70% train, 15% val, 15% test
+    Seed 42 untuk reproducibility.
+
+    Kenapa split dilakukan sekali di sini dan disimpan ke disk?
+    Supaya semua 4 kondisi ablasi (B1–B4) dievaluasi pada test set
+    yang persis sama. Kalau split dilakukan ulang di step5 dengan
+    seed yang sama, hasilnya seharusnya sama — tapi lebih rapi
+    kalau di-hardcode di sini.
     """
-    # 1. Split train (70%) vs temp (30%)
-    X_train, X_temp, y_train, y_temp = train_test_split(
+    # Dua kali split: pertama pisahkan test, lalu sisanya dibagi train+val
+    X_temp, X_test, y_temp, y_test = train_test_split(
         X, y,
-        test_size=(TEST_SIZE + VAL_SIZE),
-        stratify=y,
-        random_state=RANDOM_SEED
+        test_size=TEST_SIZE,
+        random_state=RANDOM_SEED,
+        stratify=y
     )
 
-    # 2. Split temp → val (50% of 30% = 15%) dan test (50% = 15%)
-    val_ratio = VAL_SIZE / (TEST_SIZE + VAL_SIZE)
-    X_val, X_test, y_val, y_test = train_test_split(
+    # Val adalah TEST_SIZE dari sisa (setelah test diambil)
+    # Misalnya total=1440, test=216, sisa=1224, val=216 → val_ratio = 216/1224 ≈ 0.1765
+    val_ratio = VAL_SIZE / (1.0 - TEST_SIZE)
+    X_train, X_val, y_train, y_val = train_test_split(
         X_temp, y_temp,
-        test_size=(1.0 - val_ratio),
-        stratify=y_temp,
-        random_state=RANDOM_SEED
+        test_size=val_ratio,
+        random_state=RANDOM_SEED,
+        stratify=y_temp
     )
 
-    print(f"\n📊 Hasil Split Dataset:")
-    print(f"  Train : {len(X_train):>4} sampel ({len(X_train)/len(X)*100:.1f}%)")
-    print(f"  Val   : {len(X_val):>4} sampel ({len(X_val)/len(X)*100:.1f}%)")
-    print(f"  Test  : {len(X_test):>4} sampel ({len(X_test)/len(X)*100:.1f}%)")
+    print(f"\nSplit dataset:")
+    print(f"  Train : {len(X_train)} sampel ({len(X_train)/len(X)*100:.1f}%)")
+    print(f"  Val   : {len(X_val)} sampel ({len(X_val)/len(X)*100:.1f}%)")
+    print(f"  Test  : {len(X_test)} sampel ({len(X_test)/len(X)*100:.1f}%)")
 
-    return X_train, X_val, X_test, y_train, y_val, y_test
+    return X_train, y_train, X_val, y_val, X_test, y_test
 
 
-# ── SIMPAN DATASET ────────────────────────────────────────────
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 
-def save_dataset(X_train, X_val, X_test, y_train, y_val, y_test):
-    """
-    Simpan semua split ke file .npz di FUSED_DIR.
-    .npz = arsip numpy compressed, cepat di-load ulang.
-    """
+if __name__ == "__main__":
+    print("STEP 4: Bangun Dataset (Fusion 4-Channel + Split)")
+    print("=" * 50)
+
     os.makedirs(FUSED_DIR, exist_ok=True)
 
+    # Cek apakah sudah ada dataset.npz
     out_path = os.path.join(FUSED_DIR, "dataset.npz")
+    if os.path.exists(out_path):
+        print(f"File {out_path} sudah ada.")
+        print("Hapus manual kalau mau rebuild dari awal.")
+        print("Load existing dataset untuk verifikasi...")
+        data = np.load(out_path)
+        print(f"  X_train: {data['X_train'].shape}")
+        print(f"  X_val  : {data['X_val'].shape}")
+        print(f"  X_test : {data['X_test'].shape}")
+        sys.exit(0)
+
+    # Bangun dari ENHANCED_DIR (dengan DIP — untuk kondisi B2 dan B4)
+    print("Membangun dataset dari gambar yang sudah di-enhance (CLAHE + UM)...")
+    X, y = build_full_dataset(enhanced_dir=ENHANCED_DIR)
+
+    # Split
+    X_train, y_train, X_val, y_val, X_test, y_test = split_dataset(X, y)
+
+    # Simpan sebagai .npz (compressed numpy)
+    # Kenapa .npz bukan .h5?
+    # .npz lebih portable, tidak perlu h5py, dan scikit-learn juga pakai format ini.
+    print(f"\nMenyimpan dataset ke {out_path}...")
     np.savez_compressed(
         out_path,
         X_train=X_train, y_train=y_train,
-        X_val=X_val,   y_val=y_val,
-        X_test=X_test,  y_test=y_test
-    )
-    size_mb = os.path.getsize(out_path) / 1e6
-    print(f"\n💾 Dataset disimpan ke: {out_path}")
-    print(f"   Ukuran file: {size_mb:.1f} MB")
-
-
-def load_dataset():
-    """
-    Load dataset dari file .npz.
-    Gunakan fungsi ini di step5_train.py dan step6_evaluate_gradcam.py
-    """
-    data_path = os.path.join(FUSED_DIR, "dataset.npz")
-    data = np.load(data_path)
-    return (
-        data['X_train'], data['y_train'],
-        data['X_val'],   data['y_val'],
-        data['X_test'],  data['y_test']
+        X_val=X_val,     y_val=y_val,
+        X_test=X_test,   y_test=y_test
     )
 
-
-# ── VISUALISASI DISTRIBUSI ────────────────────────────────────
-
-def visualize_distribution(y_train, y_val, y_test):
-    """
-    Plot distribusi kelas emosi di setiap split.
-    Idealnya distribusi seragam (balanced) karena RAVDESS dirancang seimbang.
-    """
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    fig.suptitle('Distribusi Kelas Emosi per Split Dataset',
-                 fontsize=14, fontweight='bold')
-
-    for ax, (split_name, y_split) in zip(axes, [
-        ('Train', y_train), ('Validation', y_val), ('Test', y_test)
-    ]):
-        counts = Counter(y_split)
-        emotions = [EMOTION_LABELS[i] for i in range(N_CLASSES)]
-        values   = [counts.get(i, 0) for i in range(N_CLASSES)]
-
-        bars = ax.bar(emotions, values,
-                      color=sns.color_palette('husl', N_CLASSES))
-        ax.set_title(f'{split_name} (n={sum(values)})')
-        ax.set_xlabel('Emosi')
-        ax.set_ylabel('Jumlah Sampel')
-        ax.tick_params(axis='x', rotation=45)
-        for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                    str(val), ha='center', va='bottom', fontsize=8)
-
-    plt.tight_layout()
-    save_path = os.path.join(RESULT_DIR, "dataset_distribution.png")
-    plt.savefig(save_path, dpi=100, bbox_inches='tight')
-    plt.show()
-    print(f"✅ Grafik distribusi disimpan ke {save_path}")
-
-
-def visualize_sample_tensor(X_train, y_train, n_samples=3):
-    """
-    Tampilkan contoh tensor 4-channel dari beberapa sampel.
-    """
-    fig, axes = plt.subplots(n_samples, 4, figsize=(16, 4*n_samples))
-    fig.suptitle('Contoh Tensor 4-Channel per Sampel',
-                 fontsize=13, fontweight='bold')
-
-    for row in range(n_samples):
-        idx = row * (len(X_train) // n_samples)
-        label = EMOTION_LABELS[y_train[idx]]
-        for col, ch_name in enumerate(CHANNEL_ORDER):
-            axes[row, col].imshow(X_train[idx, :, :, col],
-                                  cmap='viridis', aspect='auto', origin='lower')
-            axes[row, col].set_title(
-                f'{ch_name.upper()}\n(label: {label})' if col == 0 else ch_name.upper()
-            )
-            axes[row, col].axis('off')
-
-    plt.tight_layout()
-    save_path = os.path.join(RESULT_DIR, "sample_tensor_4ch.png")
-    plt.savefig(save_path, dpi=100, bbox_inches='tight')
-    plt.show()
-    print(f"✅ Gambar tensor tersimpan ke {save_path}")
-
-
-# ── MAIN ─────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    print("🚀 STEP 4: Fusi 4-Channel & Pembuatan Dataset")
-    print("="*50)
-
-    os.makedirs(RESULT_DIR, exist_ok=True)
-
-    # 1. Bangun dataset lengkap
-    print("\n[1/4] Membangun dataset dari gambar enhanced...")
-    X, y = build_full_dataset(ENHANCED_DIR)
-
-    # 2. Verifikasi label
-    print(f"\n[2/4] Distribusi kelas (sebelum split):")
-    for i, emo in enumerate(EMOTION_LABELS):
-        count = np.sum(y == i)
-        print(f"  {i}: {emo:<12} → {count} sampel")
-
-    # 3. Split
-    print("\n[3/4] Membagi dataset (stratified split)...")
-    X_train, X_val, X_test, y_train, y_val, y_test = split_dataset(X, y)
-
-    # 4. Simpan
-    print("\n[4/4] Menyimpan dataset...")
-    save_dataset(X_train, X_val, X_test, y_train, y_val, y_test)
-
-    # Visualisasi
-    print("\n📊 Membuat visualisasi distribusi...")
-    visualize_distribution(y_train, y_val, y_test)
-
-    print("\n📊 Menampilkan contoh tensor 4-channel...")
-    visualize_sample_tensor(X_train, y_train)
-
-    print("\n" + "="*50)
-    print("✅ Step 4 selesai!")
-    print(f"   Dataset tersimpan di: {FUSED_DIR}/dataset.npz")
-    print("   Lanjut ke step5_train.py")
+    file_size_mb = os.path.getsize(out_path) / 1024 / 1024
+    print(f"Tersimpan ({file_size_mb:.1f} MB)")
+    print("\nStep 4 selesai. Lanjut ke step5_train.py")
