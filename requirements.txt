@@ -1,8 +1,6 @@
-# ============================================================
 # requirements.txt — Dependensi Pipeline SER
 # Untuk Google Colab: install otomatis via step1_prepare_data.py
 # Untuk environment lokal: pip install -r requirements.txt
-# ============================================================
 
 # Audio processing
 librosa>=0.10.0
