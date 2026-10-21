@@ -1,7 +1,6 @@
 """
 step1_prepare_data.py
-=====================
-STEP PERTAMA — jalankan ini sebelum yang lain.
+STEP PERTAMA jalankan ini sebelum yang lain.
 
 Yang dilakukan di step ini:
 1. Mount Google Drive supaya data tersimpan permanen
@@ -16,16 +15,6 @@ RAVDESS (Ryerson Audio-Visual Database of Emotional Speech and Song)
 — 24 aktor, 8 emosi, total 1440 file ucapan (speech only)
 — Dikerjakan ulang oleh Kaggle: uwrfkaggler/ravdess-emotional-speech-audio
 
-Catatan nama file RAVDESS:
-03-01-05-01-02-01-12.wav
-││  │  │  │  │  │  └── aktor (01–24)
-││  │  │  │  │  └───── repetisi (01=pertama, 02=kedua)
-││  │  │  │  └──────── statement (01="Kids are talking", 02="Dogs are sitting")
-││  │  │  └─────────── intensitas (01=normal, 02=strong)
-││  │  └────────────── emosi (01–08) ← yang kita pakai
-││  └───────────────── vocal channel (01=speech, 02=song)
-│└──────────────────── modality (01=AV, 02=video only, 03=audio only)
-└───────────────────── tidak relevan
 """
 
 import os
